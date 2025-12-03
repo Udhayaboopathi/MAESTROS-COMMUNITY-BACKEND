@@ -189,7 +189,7 @@ class DiscordBot:
             )
             embed.add_field(
                 name='Application Portal',
-                value='[Click here to apply](http://localhost:3000/apply)',
+                value='[Click here to apply](https://maestros-community-frontend-5arz.vercel.app//apply)',
                 inline=False
             )
             embed.add_field(

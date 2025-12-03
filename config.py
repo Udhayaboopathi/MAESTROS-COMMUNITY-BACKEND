@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     api_reload: bool = True
     
     # CORS
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "https://maestros-community-frontend-5arz.vercel.app/"
     
     # Frontend URL for OAuth redirects
-    frontend_url: str = "http://localhost:3000"
+    frontend_url: str = "https://maestros-community-frontend-5arz.vercel.app/"
     
     # Admin
     admin_discord_ids: str
