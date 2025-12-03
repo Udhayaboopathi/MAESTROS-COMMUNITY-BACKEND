@@ -2,9 +2,8 @@
 fastapi==0.115.0
 uvicorn[standard]==0.34.0
 
-# Discord Integration (Python 3.14 compatible)
+# Discord Integration
 discord.py==2.6.4
-audioop-lts==0.2.1
 
 # Database
 motor==3.7.0
