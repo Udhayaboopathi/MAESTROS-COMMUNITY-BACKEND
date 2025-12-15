@@ -258,21 +258,60 @@ class DiscordBot:
             # Get online members
             online_members = [m for m in guild.members if m.status != discord.Status.offline and not m.bot]
             
-            # Get online count for each role
+            # Get online count for each role with both nickname and username
             ceo_online = []
             manager_online = []
             community_member_online = []
             
+            # Get database reference
+            db = get_database()
+            
             for member in online_members:
                 member_role_ids = [role.id for role in member.roles]
                 
+                # Create basic member info with both display_name (nickname) and name (username)
+                member_info = {
+                    'display_name': str(member.display_name),  # Server nickname or username if no nickname
+                    'username': str(member.name),  # Actual Discord username
+                    'discriminator': str(member.discriminator) if member.discriminator != '0' else None,
+                    'discord_id': str(member.id),
+                    'avatar': str(member.avatar.key) if member.avatar else None,
+                }
+                
+                # Fetch additional user data from database if available
+                if db is not None:
+                    try:
+                        user_data = await db.users.find_one({'discord_id': str(member.id)})
+                        if user_data:
+                            member_info.update({
+                                'level': user_data.get('level', 1),
+                                'xp': user_data.get('xp', 0),
+                                'badges': user_data.get('badges', []),
+                                'joined_at': user_data.get('joined_at').isoformat() if user_data.get('joined_at') else None,
+                                'last_login': user_data.get('last_login').isoformat() if user_data.get('last_login') else None,
+                            })
+                            
+                            # Add permissions info
+                            is_ceo = self.ceo_role_id and self.ceo_role_id in member_role_ids
+                            is_manager = self.manager_role_id and self.manager_role_id in member_role_ids
+                            is_admin = any('admin' in role.name.lower() for role in member.roles)
+                            
+                            member_info['permissions'] = {
+                                'is_ceo': is_ceo,
+                                'is_manager': is_manager,
+                                'is_admin': is_admin,
+                                'can_manage_applications': is_manager or is_ceo or is_admin
+                            }
+                    except Exception as e:
+                        print(f'⚠️ Error fetching user data for {member.name}: {e}')
+                
                 # Check each role (member can have multiple roles)
                 if self.ceo_role_id and self.ceo_role_id in member_role_ids:
-                    ceo_online.append(str(member.name))
+                    ceo_online.append(member_info)
                 elif self.manager_role_id and self.manager_role_id in member_role_ids:
-                    manager_online.append(str(member.name))
+                    manager_online.append(member_info)
                 elif self.member_role_id and self.member_role_id in member_role_ids:
-                    community_member_online.append(str(member.name))
+                    community_member_online.append(member_info)
             
             print(f'📊 Stats - Total: {guild.member_count}, Online: {len(online_members)}, CEO: {len(ceo_online)}, Managers: {len(manager_online)}, Community: {len(community_member_online)}')
             

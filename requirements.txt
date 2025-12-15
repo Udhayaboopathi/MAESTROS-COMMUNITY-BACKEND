@@ -10,16 +10,18 @@ motor==3.7.0
 pymongo==4.11.0
 
 # Data Validation & Settings
-pydantic==2.10.5
-pydantic-settings==2.7.0
-pydantic-core==2.27.2
+pydantic>=2.10.5
+pydantic-settings>=2.7.0
+pydantic-core>=2.27.2
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
+cryptography>=41.0.0
 passlib[bcrypt]==1.7.4
+bcrypt>=4.0.0
 
 # HTTP Client
-aiohttp==3.11.11
+aiohttp>=3.11.11
 
 # Utilities
 python-dotenv==1.0.1

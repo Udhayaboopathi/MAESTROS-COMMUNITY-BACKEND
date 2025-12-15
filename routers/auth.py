@@ -24,9 +24,22 @@ async def login():
     return RedirectResponse(url=discord_auth_url)
 
 @router.get("/callback")
-async def callback(code: str):
+async def callback(code: str, request: Request):
     """Handle Discord OAuth callback and redirect to frontend with token"""
     try:
+        # Determine frontend URL from referer or use default
+        referer = request.headers.get("referer", "")
+        if referer:
+            # Extract origin from referer (e.g., http://192.168.1.2:3000/)
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+        elif settings.frontend_url:
+            frontend_url = settings.frontend_url
+        else:
+            # Default fallback
+            frontend_url = "http://localhost:3000"
+        
         async with aiohttp.ClientSession() as session:
             # Exchange code for access token
             token_url = "https://discord.com/api/oauth2/token"
@@ -42,7 +55,7 @@ async def callback(code: str):
                 if resp.status != 200:
                     error_text = await resp.text()
                     print(f"❌ Token exchange failed: {error_text}")
-                    return RedirectResponse(url=f"{settings.frontend_url}/?error=token_failed")
+                    return RedirectResponse(url=f"{frontend_url}/?error=token_failed")
                 token_data = await resp.json()
             
             # Get user info from Discord
@@ -50,7 +63,7 @@ async def callback(code: str):
             
             async with session.get("https://discord.com/api/users/@me", headers=headers) as resp:
                 if resp.status != 200:
-                    return RedirectResponse(url=f"{settings.frontend_url}/?error=user_info_failed")
+                    return RedirectResponse(url=f"{frontend_url}/?error=user_info_failed")
                 user_data = await resp.json()
             
             # Get user guilds
@@ -63,6 +76,7 @@ async def callback(code: str):
             
             # Get guild member data to fetch roles (requires bot token)
             guild_roles = []
+            display_name = user_data["username"]  # Default to username
             if is_member:
                 bot_headers = {"Authorization": f"Bot {settings.discord_bot_token}"}
                 guild_member_url = f"https://discord.com/api/v10/guilds/{settings.discord_guild_id}/members/{user_data['id']}"
@@ -72,14 +86,22 @@ async def callback(code: str):
                         if resp.status == 200:
                             member_data = await resp.json()
                             guild_roles = member_data.get("roles", [])
+                            # Get server nickname (nick) or global display name, fallback to username
+                            nick = member_data.get("nick")
+                            global_name = user_data.get("global_name")
+                            display_name = nick or global_name or user_data["username"]
                             print(f"✅ Fetched roles for {user_data['username']}: {guild_roles}")
+                            print(f"   Server Nickname: {nick if nick else 'Not set'}")
+                            print(f"   Global Display Name: {global_name if global_name else 'Not set'}")
+                            print(f"   Display Name used: {display_name}")
                         else:
                             print(f"⚠️ Could not fetch guild member data: {resp.status}")
                 except Exception as e:
                     print(f"⚠️ Error fetching guild roles: {str(e)}")
         
-        # Create or update user in database
+        # Create or update user in database (no display_name - fetch in real-time)
         db = get_database()
+        existing_user = await db.users.find_one({"discord_id": user_data["id"]})
         
         user_dict = {
             "discord_id": user_data["id"],
@@ -90,8 +112,6 @@ async def callback(code: str):
             "last_login": datetime.utcnow(),
             "guild_roles": guild_roles,  
         }
-        
-        existing_user = await db.users.find_one({"discord_id": user_data["id"]})
         
         if existing_user:
             # Update existing user
@@ -120,16 +140,18 @@ async def callback(code: str):
         )
         
         # Redirect to frontend with token
-        frontend_url = f"{settings.frontend_url}/?token={access_token}"
-        return RedirectResponse(url=frontend_url)
+        redirect_url = f"{frontend_url}/?token={access_token}"
+        return RedirectResponse(url=redirect_url)
         
     except Exception as e:
         print(f"❌ OAuth callback error: {str(e)}")
-        return RedirectResponse(url=f"{settings.frontend_url}/?error=auth_failed")
+        # Try to get frontend_url from local scope or use fallback
+        fallback_url = locals().get('frontend_url', 'http://localhost:3000')
+        return RedirectResponse(url=f"{fallback_url}/?error=auth_failed")
 
 @router.get("/me")
-async def get_me(current_user: dict = Depends(get_current_user)):
-    """Get current user info with role details"""
+async def get_me(current_user: dict = Depends(get_current_user), request: Request = None):
+    """Get current user info with role details - fetches live data from Discord"""
     guild_roles = current_user.get("guild_roles", [])
     
     # Check if user is manager or CEO
@@ -137,12 +159,102 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     is_ceo = settings.ceo_role_id in guild_roles
     is_admin = current_user.get("discord_id") in settings.admin_ids_list
     
+    # Fetch comprehensive Discord user data
+    display_name = current_user["username"]
+    avatar = current_user.get("avatar")
+    discord_details = {}
+    
+    # Try to get Discord bot instance for live data
+    discord_bot = None
+    if request:
+        discord_bot = getattr(request.app.state, 'discord_bot', None)
+        if not discord_bot:
+            try:
+                import main
+                discord_bot = main.discord_bot
+            except:
+                pass
+    
+    # Fetch from Discord bot if available
+    if discord_bot and hasattr(discord_bot, 'bot') and discord_bot.bot and discord_bot.is_ready:
+        try:
+            guild = discord_bot.bot.get_guild(discord_bot.guild_id)
+            if guild:
+                member = guild.get_member(int(current_user['discord_id']))
+                if member:
+                    # Update avatar from Discord member
+                    if member.avatar:
+                        avatar = member.avatar.key
+                    
+                    # Get role names
+                    role_names = [role.name for role in member.roles if role.name != "@everyone"]
+                    guild_roles = role_names
+                    
+                    discord_details = {
+                        "global_name": member.global_name,
+                        "server_nickname": member.nick,
+                        "server_avatar": member.guild_avatar.key if member.guild_avatar else None,
+                        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+                        "premium_since": member.premium_since.isoformat() if member.premium_since else None,
+                    }
+                    
+                    # Priority for display name
+                    display_name = member.nick or member.global_name or current_user["username"]
+                    print(f"✅ /me endpoint - Fetched Discord data for {current_user['discord_id']}: avatar={avatar}, nickname={member.nick}")
+        except Exception as e:
+            print(f"⚠️ Bot fetch failed in /me, falling back to API: {str(e)}")
+    
+    # Fallback to Discord API if bot not available
+    if not discord_details:
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Get user data for global info
+                user_headers = {"Authorization": f"Bot {settings.discord_bot_token}"}
+                user_url = f"https://discord.com/api/v10/users/{current_user['discord_id']}"
+                
+                async with session.get(user_url, headers=user_headers) as user_resp:
+                    if user_resp.status == 200:
+                        user_info = await user_resp.json()
+                        if not avatar and user_info.get("avatar"):
+                            avatar = user_info.get("avatar")
+                        discord_details = {
+                            "global_name": user_info.get("global_name"),
+                            "avatar_hash": user_info.get("avatar"),
+                            "banner": user_info.get("banner"),
+                            "banner_color": user_info.get("banner_color"),
+                            "accent_color": user_info.get("accent_color"),
+                            "bot": user_info.get("bot", False),
+                            "public_flags": user_info.get("public_flags", 0),
+                        }
+                
+                # Get guild member data for server-specific info
+                guild_member_url = f"https://discord.com/api/v10/guilds/{settings.discord_guild_id}/members/{current_user['discord_id']}"
+                
+                async with session.get(guild_member_url, headers=user_headers) as resp:
+                    if resp.status == 200:
+                        member_data = await resp.json()
+                        discord_details.update({
+                            "server_nickname": member_data.get("nick"),
+                            "server_avatar": member_data.get("avatar"),
+                            "joined_at": member_data.get("joined_at"),
+                            "premium_since": member_data.get("premium_since"),
+                            "pending": member_data.get("pending", False),
+                            "communication_disabled_until": member_data.get("communication_disabled_until"),
+                        })
+                        
+                        # Priority for display name
+                        display_name = member_data.get("nick") or discord_details.get("global_name") or current_user["username"]
+        except Exception as e:
+            print(f"⚠️ Could not fetch Discord details: {str(e)}")
+    
     return {
         "id": str(current_user["_id"]),
         "discord_id": current_user["discord_id"],
         "username": current_user["username"],
+        "display_name": display_name,
         "discriminator": current_user.get("discriminator", "0"),
-        "avatar": current_user.get("avatar"),
+        "avatar": avatar,
+        "email": current_user.get("email"),
         "roles": current_user.get("roles", []),
         "guild_roles": guild_roles,
         "xp": current_user.get("xp", 0),
@@ -150,6 +262,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "badges": current_user.get("badges", []),
         "joined_at": current_user.get("joined_at"),
         "last_login": current_user.get("last_login"),
+        "discord_details": discord_details,  # All Discord-specific info
         "permissions": {
             "is_admin": is_admin,
             "is_ceo": is_ceo,

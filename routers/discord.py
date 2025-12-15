@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from typing import Dict
+from database import get_database
 
 router = APIRouter()
 
@@ -24,3 +25,25 @@ async def get_bot_status():
         "online": discord_stats.get("total", 0) > 0,
         "last_update": discord_stats.get("last_update"),
     }
+
+@router.get("/user/{discord_id}")
+async def get_user_details(discord_id: str):
+    """Get detailed user information by Discord ID"""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+    
+    user = await db.users.find_one({'discord_id': discord_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Convert ObjectId to string
+    user['_id'] = str(user['_id'])
+    
+    # Convert datetime objects to ISO format strings
+    if 'joined_at' in user and user['joined_at']:
+        user['joined_at'] = user['joined_at'].isoformat()
+    if 'last_login' in user and user['last_login']:
+        user['last_login'] = user['last_login'].isoformat()
+    
+    return user

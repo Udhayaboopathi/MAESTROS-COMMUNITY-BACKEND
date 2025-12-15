@@ -37,6 +37,9 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(discord_bot.start_bot())
     print("✅ Discord bot starting...")
     
+    # Make bot instance available to routes
+    app.state.discord_bot = discord_bot
+    
     yield
     
     # Shutdown

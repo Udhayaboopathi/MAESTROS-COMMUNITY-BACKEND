@@ -1,10 +1,17 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from database import get_database
 from utils import get_current_user, calculate_level
 from datetime import datetime
+import os
 
 router = APIRouter()
+
+# Access to global bot instance
+def get_bot_instance():
+    """Get the Discord bot instance from main"""
+    import main
+    return main.discord_bot
 
 @router.get("/me")
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
@@ -75,23 +82,75 @@ async def update_user(
     return {"message": "Profile updated", "user": updated_user}
 
 @router.get("/{user_id}")
-async def get_user_by_id(user_id: str):
-    """Get user by ID"""
+async def get_user_by_id(user_id: str, request: Request):
+    """Get user by ID with full Discord guild member info"""
     db = get_database()
     user = await db.users.find_one({"discord_id": user_id})
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    return {
+    # Try to get Discord bot instance (first from app state, then from global)
+    discord_bot = getattr(request.app.state, 'discord_bot', None)
+    if not discord_bot:
+        discord_bot = get_bot_instance()
+    
+    # Base user data
+    user_data = {
         "id": str(user["_id"]),
         "discord_id": user["discord_id"],
-        "username": user["username"],
+        "username": user.get("username"),
+        "display_name": user.get("display_name"),
+        "discriminator": user.get("discriminator"),
         "avatar": user.get("avatar"),
         "level": user.get("level", 1),
         "xp": user.get("xp", 0),
         "badges": user.get("badges", []),
+        "guild_roles": user.get("guild_roles", []),
+        "permissions": user.get("permissions", {}),
+        "joined_at": user.get("joined_at"),
+        "last_seen": user.get("last_seen"),
+        "last_login": user.get("last_login"),
+        "created_at": user.get("created_at"),
+        "discord_details": None,
     }
+    
+    # Try to fetch Discord guild member info
+    try:
+        if discord_bot and hasattr(discord_bot, 'bot') and discord_bot.bot and discord_bot.is_ready:
+            guild = discord_bot.bot.get_guild(discord_bot.guild_id)
+            if guild:
+                member = guild.get_member(int(user_id))
+                if member:
+                    # Update avatar from Discord member
+                    if member.avatar:
+                        user_data["avatar"] = member.avatar.key
+                    
+                    # Add Discord guild member details
+                    user_data["discord_details"] = {
+                        "global_name": member.global_name,
+                        "server_nickname": member.nick,
+                        "server_avatar": member.guild_avatar.key if member.guild_avatar else None,
+                        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+                        "premium_since": member.premium_since.isoformat() if member.premium_since else None,
+                    }
+                    
+                    # Get role names
+                    role_names = [role.name for role in member.roles if role.name != "@everyone"]
+                    user_data["guild_roles"] = role_names
+                    print(f"✅ Fetched Discord data for user {user_id}: nickname={member.nick}, roles={len(role_names)}, avatar={user_data['avatar']}")
+                else:
+                    print(f"⚠️ Member {user_id} not found in guild")
+            else:
+                print(f"⚠️ Guild {discord_bot.guild_id} not found")
+        else:
+            print(f"⚠️ Discord bot not ready: bot={discord_bot is not None}, ready={discord_bot.is_ready if discord_bot else False}")
+    except Exception as e:
+        print(f"❌ Error fetching Discord member info for {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return user_data
 
 @router.get("/leaderboard/xp")
 async def get_xp_leaderboard(limit: int = 10):
