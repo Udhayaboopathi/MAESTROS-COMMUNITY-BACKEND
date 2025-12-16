@@ -276,6 +276,19 @@ class DiscordBot:
                     'discriminator': str(member.discriminator) if member.discriminator != '0' else None,
                     'discord_id': str(member.id),
                     'avatar': str(member.avatar.key) if member.avatar else None,
+                    'guild_roles': [str(role_id) for role_id in member_role_ids],  # Store role IDs as strings
+                }
+                
+                # Add permissions info for ALL members
+                is_ceo = self.ceo_role_id and self.ceo_role_id in member_role_ids
+                is_manager = self.manager_role_id and self.manager_role_id in member_role_ids
+                is_admin = any('admin' in role.name.lower() for role in member.roles)
+                
+                member_info['permissions'] = {
+                    'is_ceo': is_ceo,
+                    'is_manager': is_manager,
+                    'is_admin': is_admin,
+                    'can_manage_applications': is_manager or is_ceo or is_admin
                 }
                 
                 # Fetch additional user data from database if available
@@ -290,18 +303,6 @@ class DiscordBot:
                                 'joined_at': user_data.get('joined_at').isoformat() if user_data.get('joined_at') else None,
                                 'last_login': user_data.get('last_login').isoformat() if user_data.get('last_login') else None,
                             })
-                            
-                            # Add permissions info
-                            is_ceo = self.ceo_role_id and self.ceo_role_id in member_role_ids
-                            is_manager = self.manager_role_id and self.manager_role_id in member_role_ids
-                            is_admin = any('admin' in role.name.lower() for role in member.roles)
-                            
-                            member_info['permissions'] = {
-                                'is_ceo': is_ceo,
-                                'is_manager': is_manager,
-                                'is_admin': is_admin,
-                                'can_manage_applications': is_manager or is_ceo or is_admin
-                            }
                     except Exception as e:
                         print(f'⚠️ Error fetching user data for {member.name}: {e}')
                 
@@ -315,14 +316,20 @@ class DiscordBot:
             
             print(f'📊 Stats - Total: {guild.member_count}, Online: {len(online_members)}, CEO: {len(ceo_online)}, Managers: {len(manager_online)}, Community: {len(community_member_online)}')
             
+            # Combine CEO and Managers into managers array
+            # All members with CEO or Manager role go to managers
+            managers_combined = ceo_online + manager_online
+            
+            # Regular members go to members array
+            members_array = community_member_online
+            
             # Update in-memory stats (accessed by discord router)
             from routers.discord import discord_stats
             discord_stats.update({
                 'total': guild.member_count,
                 'online': len(online_members),
-                'ceo_online': ceo_online,
-                'manager_online': manager_online,
-                'community_member_online': community_member_online,
+                'managers': managers_combined,  # CEOs + Managers
+                'members': members_array,       # Regular members
                 'last_update': datetime.utcnow().isoformat()
             })
             

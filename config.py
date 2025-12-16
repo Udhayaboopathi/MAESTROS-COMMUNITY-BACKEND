@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     manager_role_id: str = ""
     member_role_id: str = ""  # Regular member role, not management
     rules_category_id: str = ""  # Discord Rules Category ID
+    rp_invite_channel_id: str = ""  # Channel ID for RP server invite requests
     
     # Discord OAuth
     discord_client_id: str

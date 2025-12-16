@@ -68,6 +68,44 @@ def get_bot_instance():
     import main
     return main.discord_bot
 
+@router.get("")
+async def get_all_members():
+    """Get all community members from database"""
+    db = get_database()
+    
+    # Fetch all users from database
+    users = await db.users.find().to_list(None)
+    
+    members = []
+    for user in users:
+        # Extract account creation date from Discord ID
+        account_created = get_account_creation_date(user.get("discord_id"))
+        
+        member_data = {
+            "discord_id": user.get("discord_id"),
+            "username": user.get("username"),
+            "display_name": user.get("display_name"),
+            "discriminator": user.get("discriminator"),
+            "avatar": user.get("avatar"),
+            "level": user.get("level", 1),
+            "xp": user.get("xp", 0),
+            "badges": user.get("badges", []),
+            "guild_roles": user.get("guild_roles", []),
+            "permissions": user.get("permissions", {
+                "is_ceo": False,
+                "is_manager": False,
+                "is_admin": False,
+                "can_manage_applications": False
+            }),
+            "joined_at": user.get("joined_at").isoformat() if user.get("joined_at") else None,
+            "last_login": user.get("last_login").isoformat() if user.get("last_login") else None,
+            "account_created_at": account_created.isoformat() if account_created else None,
+            "highest_role": get_highest_role(user.get("guild_roles", []))
+        }
+        members.append(member_data)
+    
+    return members
+
 @router.get("/me")
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
     """Get current user profile"""
