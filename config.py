@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     rules_category_id: str = ""  # Discord Rules Category ID
     rp_invite_channel_id: str = ""  # Channel ID for RP server invite requests
     
+    # Discord Role Structure for Game Creation
+    members_eoll_role_id: str = ""  # Members role ID - game roles will be placed below this role
+    everyone_role_id: str = ""  # Everyone role ID for permission removal
+    community_category_id: str = ""  # Community category ID for positioning game categories
+    
     # Discord OAuth
     discord_client_id: str
     discord_client_secret: str
