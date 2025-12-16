@@ -27,18 +27,18 @@ async def login():
 async def callback(code: str, request: Request):
     """Handle Discord OAuth callback and redirect to frontend with token"""
     try:
-        # Determine frontend URL from referer or use default
-        referer = request.headers.get("referer", "")
-        if referer:
-            # Extract origin from referer (e.g., http://192.168.1.2:3000/)
-            from urllib.parse import urlparse
-            parsed = urlparse(referer)
-            frontend_url = f"{parsed.scheme}://{parsed.netloc}"
-        elif settings.frontend_url:
-            frontend_url = settings.frontend_url
-        else:
-            # Default fallback
-            frontend_url = "http://localhost:3000"
+        # Determine frontend URL from settings or referer
+        frontend_url = settings.frontend_url
+        
+        # If frontend_url not set, try to extract from referer
+        if not frontend_url:
+            referer = request.headers.get("referer", "")
+            if referer:
+                from urllib.parse import urlparse
+                parsed = urlparse(referer)
+                frontend_url = f"{parsed.scheme}://{parsed.netloc}"
+            else:
+                raise HTTPException(status_code=500, detail="Frontend URL not configured")
         
         async with aiohttp.ClientSession() as session:
             # Exchange code for access token
@@ -145,9 +145,12 @@ async def callback(code: str, request: Request):
         
     except Exception as e:
         print(f"❌ OAuth callback error: {str(e)}")
-        # Try to get frontend_url from local scope or use fallback
-        fallback_url = locals().get('frontend_url', 'http://localhost:3000')
-        return RedirectResponse(url=f"{fallback_url}/?error=auth_failed")
+        # Use frontend_url from settings or referer
+        fallback_url = settings.frontend_url or locals().get('frontend_url', '')
+        if fallback_url:
+            return RedirectResponse(url=f"{fallback_url}/?error=auth_failed")
+        else:
+            raise HTTPException(status_code=500, detail="OAuth callback failed and frontend URL not configured")
 
 @router.get("/me")
 async def get_me(current_user: dict = Depends(get_current_user), request: Request = None):
