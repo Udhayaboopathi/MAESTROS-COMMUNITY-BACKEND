@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     ceo_role_id: str = ""
     manager_role_id: str = ""
     member_role_id: str = ""  # Regular member role, not management
+    rules_category_id: str = ""  # Discord Rules Category ID
     
     # Discord OAuth
     discord_client_id: str

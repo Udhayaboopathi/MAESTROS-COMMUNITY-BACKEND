@@ -154,9 +154,9 @@ async def get_me(current_user: dict = Depends(get_current_user), request: Reques
     """Get current user info with role details - fetches live data from Discord"""
     guild_roles = current_user.get("guild_roles", [])
     
-    # Check if user is manager or CEO
-    is_manager = settings.manager_role_id in guild_roles
-    is_ceo = settings.ceo_role_id in guild_roles
+    # Check if user is manager or CEO using role IDs (stored as strings in guild_roles)
+    is_manager = settings.manager_role_id in [str(role) for role in guild_roles]
+    is_ceo = settings.ceo_role_id in [str(role) for role in guild_roles]
     is_admin = current_user.get("discord_id") in settings.admin_ids_list
     
     # Fetch comprehensive Discord user data
@@ -295,9 +295,9 @@ async def sync_user_roles(current_user: dict = Depends(get_current_user)):
                     
                     print(f"✅ Synced roles for {current_user['username']}: {guild_roles}")
                     
-                    # Check permissions
-                    is_manager = settings.manager_role_id in guild_roles
-                    is_ceo = settings.ceo_role_id in guild_roles
+                    # Check permissions using role IDs (stored as strings)
+                    is_manager = settings.manager_role_id in [str(role) for role in guild_roles]
+                    is_ceo = settings.ceo_role_id in [str(role) for role in guild_roles]
                     is_admin = current_user.get("discord_id") in settings.admin_ids_list
                     
                     return {

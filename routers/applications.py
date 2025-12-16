@@ -368,11 +368,24 @@ async def get_pending_applications(
         
         user = await db.users.find_one({"discord_id": app["user_id"]})
         if user:
+            # Calculate account age from Discord snowflake ID
+            discord_id = int(app["user_id"])
+            discord_epoch = 1420070400000
+            timestamp = ((discord_id >> 22) + discord_epoch) / 1000
+            account_created = datetime.fromtimestamp(timestamp)
+            
             app["user_info"] = {
                 "username": user.get("username"),
+                "discriminator": user.get("discriminator", "0"),
                 "avatar": user.get("avatar"),
+                "email": user.get("email"),
                 "level": user.get("level", 1),
-                "xp": user.get("xp", 0)
+                "xp": user.get("xp", 0),
+                "badges": user.get("badges", []),
+                "guild_roles": user.get("guild_roles", []),
+                "joined_at": user.get("joined_at"),
+                "last_login": user.get("last_login"),
+                "account_created": account_created.isoformat(),
             }
     
     return {
@@ -416,11 +429,24 @@ async def get_all_applications_manager(
         
         user = await db.users.find_one({"discord_id": app["user_id"]})
         if user:
+            # Calculate account age from Discord snowflake ID
+            discord_id = int(app["user_id"])
+            discord_epoch = 1420070400000
+            timestamp = ((discord_id >> 22) + discord_epoch) / 1000
+            account_created = datetime.fromtimestamp(timestamp)
+            
             app["user_info"] = {
                 "username": user.get("username"),
+                "discriminator": user.get("discriminator", "0"),
                 "avatar": user.get("avatar"),
+                "email": user.get("email"),
                 "level": user.get("level", 1),
-                "xp": user.get("xp", 0)
+                "xp": user.get("xp", 0),
+                "badges": user.get("badges", []),
+                "guild_roles": user.get("guild_roles", []),
+                "joined_at": user.get("joined_at"),
+                "last_login": user.get("last_login"),
+                "account_created": account_created.isoformat(),
             }
     
     return {
@@ -589,3 +615,43 @@ async def get_application_stats(
         "recent_week": recent,
         "approval_rate": round((approved / total * 100) if total > 0 else 0, 2)
     }
+
+@router.delete("/manager/{application_id}")
+async def delete_application(
+    application_id: str,
+    manager: dict = Depends(require_manager_or_admin)
+):
+    """Delete an application - Manager access"""
+    db = get_database()
+    from bson import ObjectId
+    
+    try:
+        app_oid = ObjectId(application_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid application ID")
+    
+    application = await db.applications.find_one({"_id": app_oid})
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Delete the application
+    result = await db.applications.delete_one({"_id": app_oid})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Log activity
+    await db.activity_logs.insert_one({
+        "user_id": application["user_id"],
+        "action": "application_deleted",
+        "metadata": {
+            "application_id": application_id,
+            "deleted_by": manager["discord_id"],
+            "previous_status": application.get("status")
+        },
+        "timestamp": datetime.utcnow()
+    })
+    
+    print(f"🗑️ Application {application_id} DELETED by {manager.get('username')}")
+    
+    return {"message": "Application deleted successfully"}

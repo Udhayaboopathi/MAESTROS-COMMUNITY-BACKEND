@@ -80,7 +80,10 @@ async def require_manager_or_admin(current_user: dict = Depends(get_current_user
     manager_role_id = settings.manager_role_id
     ceo_role_id = settings.ceo_role_id
     
-    if manager_role_id in guild_roles or ceo_role_id in guild_roles:
+    # Convert role IDs to strings for comparison
+    guild_role_strs = [str(role) for role in guild_roles]
+    
+    if manager_role_id in guild_role_strs or ceo_role_id in guild_role_strs:
         return current_user
     
     raise HTTPException(

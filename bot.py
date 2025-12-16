@@ -382,3 +382,221 @@ class DiscordBot:
         if self.bot:
             await self.bot.close()
             print('✅ Discord bot stopped')
+    
+    async def post_rule_to_discord(self, rule_data: dict, category_id: str):
+        """Post or update a rule in Discord channel based on category"""
+        try:
+            if not self.is_ready:
+                print('⚠️ Bot not ready, skipping Discord rule post')
+                return
+            
+            # Get the category
+            category = self.bot.get_channel(int(category_id))
+            if not category or not isinstance(category, discord.CategoryChannel):
+                print(f'⚠️ Discord category {category_id} not found or not a category')
+                return
+            
+            # Get rule category and find matching channel
+            rule_category = rule_data.get('category', '').lower()
+            
+            # Find channel in category that matches the rule category name
+            channel = None
+            for ch in category.channels:
+                if isinstance(ch, discord.TextChannel):
+                    # Match channel name with rule category (e.g., "Server-Rules" -> "server-rules")
+                    ch_name = ch.name.lower()
+                    # Remove hyphens/underscores for comparison
+                    ch_name_clean = ch_name.replace('-', '').replace('_', '')
+                    rule_cat_clean = rule_category.replace('-', '').replace('_', '')
+                    
+                    if rule_cat_clean in ch_name_clean or ch_name_clean in rule_cat_clean:
+                        channel = ch
+                        break
+            
+            if not channel:
+                print(f'⚠️ No matching channel found in category for: {rule_category}')
+                print(f'   Available channels: {[ch.name for ch in category.channels if isinstance(ch, discord.TextChannel)]}')
+                # Use first text channel in category as fallback
+                for ch in category.channels:
+                    if isinstance(ch, discord.TextChannel):
+                        channel = ch
+                        print(f'⚠️ Using fallback channel: {ch.name}')
+                        break
+            
+            if not channel:
+                print(f'⚠️ No text channels found in category {category_id}')
+                return
+            
+            print(f'📝 Posting rule to channel: {channel.name}')
+            
+            # Parse individual rules from rule_content
+            rules_list = rule_data['rule_content'].split('\n')
+            rules_list = [r.strip() for r in rules_list if r.strip()]
+            
+            # Get guild icon URL
+            guild = self.bot.get_guild(self.guild_id)
+            guild_icon_url = None
+            if guild and guild.icon:
+                guild_icon_url = str(guild.icon.url)
+            
+            # Create a clean, professional embed with justified content style
+            embed = discord.Embed(
+                title=f"📜 {rule_data['title']}",
+                color=0xD4AF37,  # Professional gold color
+                timestamp=datetime.utcnow()
+            )
+            
+            # Set author with guild icon
+            if guild_icon_url:
+                embed.set_author(
+                    name="Maestros Community Rules",
+                    icon_url=guild_icon_url
+                )
+            else:
+                embed.set_author(name="Maestros Community Rules")
+            
+            # Add each rule as a separate field for clean, justified layout
+            for idx, rule_text in enumerate(rules_list, 1):
+                embed.add_field(
+                    name=f"📌 Rule {idx}",
+                    value=rule_text,
+                    inline=False
+                )
+            
+            # Add guild icon as thumbnail if available
+            if guild_icon_url:
+                embed.set_thumbnail(url=guild_icon_url)
+            
+            # Simple, clean footer
+            if guild_icon_url:
+                embed.set_footer(
+                    text="Regards from Maestros Community",
+                    icon_url=guild_icon_url
+                )
+            else:
+                embed.set_footer(text="Regards from Maestros Community")
+            
+            # Check if there's an existing message to update (stored in database)
+            db = get_database()
+            if db is not None:
+                existing_msg = await db.rules.find_one({'_id': rule_data.get('_id')})
+                discord_msg_id = existing_msg.get('discord_message_id') if existing_msg else None
+                
+                if discord_msg_id:
+                    # Try to edit existing message
+                    try:
+                        message = await channel.fetch_message(int(discord_msg_id))
+                        await message.edit(embed=embed)
+                        print(f'✅ Updated rule in Discord channel {channel.name}')
+                        return
+                    except discord.NotFound:
+                        print(f'⚠️ Original message not found, posting new one')
+                    except Exception as e:
+                        print(f'⚠️ Error updating Discord message: {e}')
+                
+                # Post new message
+                message = await channel.send(embed=embed)
+                
+                # Store message ID in database for future updates
+                if rule_data.get('_id'):
+                    await db.rules.update_one(
+                        {'_id': rule_data['_id']},
+                        {'$set': {'discord_message_id': str(message.id)}}
+                    )
+                
+                print(f'✅ Posted rule to Discord channel {channel.name}')
+                
+        except Exception as e:
+            print(f'❌ Error posting rule to Discord: {e}')
+    
+    async def delete_rule_from_discord(self, rule_data: dict, category_id: str):
+        """Delete a rule message from Discord channel"""
+        try:
+            if not self.is_ready:
+                return
+            
+            discord_msg_id = rule_data.get('discord_message_id')
+            if not discord_msg_id:
+                return
+            
+            # Get the category
+            category = self.bot.get_channel(int(category_id))
+            if not category or not isinstance(category, discord.CategoryChannel):
+                return
+            
+            # Get rule category and find matching channel
+            rule_category = rule_data.get('category', '').lower()
+            
+            channel = None
+            for ch in category.channels:
+                if isinstance(ch, discord.TextChannel):
+                    ch_name = ch.name.lower()
+                    ch_name_clean = ch_name.replace('-', '').replace('_', '')
+                    rule_cat_clean = rule_category.replace('-', '').replace('_', '')
+                    
+                    if rule_cat_clean in ch_name_clean or ch_name_clean in rule_cat_clean:
+                        channel = ch
+                        break
+            
+            if not channel:
+                return
+            
+            discord_msg_id = rule_data.get('discord_message_id')
+            if not discord_msg_id:
+                return
+            
+            # Get the category
+            category = self.bot.get_channel(int(category_id))
+            if not category or not isinstance(category, discord.CategoryChannel):
+                return
+            
+            # Get rule category and find matching channel
+            rule_category = rule_data.get('category', '').lower()
+            
+            channel = None
+            for ch in category.channels:
+                if isinstance(ch, discord.TextChannel):
+                    ch_name = ch.name.lower().replace('-', '-')
+                    if rule_category in ch_name or ch_name in rule_category:
+                        channel = ch
+                        break
+            
+            if not channel:
+                return
+            
+            try:
+                message = await channel.fetch_message(int(discord_msg_id))
+                await message.delete()
+                print(f'✅ Deleted rule from Discord channel {channel.name}')
+            except discord.NotFound:
+                print(f'⚠️ Discord message not found')
+            except Exception as e:
+                print(f'❌ Error deleting Discord message: {e}')
+                
+        except Exception as e:
+            print(f'❌ Error deleting rule from Discord: {e}')
+    
+    async def get_category_channels(self, category_id: str) -> list:
+        """Get all text channel names from a category"""
+        try:
+            if not self.is_ready:
+                return []
+            
+            category = self.bot.get_channel(int(category_id))
+            if not category or not isinstance(category, discord.CategoryChannel):
+                return []
+            
+            channels = []
+            for ch in category.channels:
+                if isinstance(ch, discord.TextChannel):
+                    channels.append({
+                        'id': str(ch.id),
+                        'name': ch.name,
+                        'display_name': ch.name.replace('-', ' ').title()
+                    })
+            
+            return channels
+            
+        except Exception as e:
+            print(f'❌ Error getting category channels: {e}')
+            return []

@@ -12,7 +12,7 @@ from config import settings
 from database import connect_to_mongo, close_mongo_connection
 
 # Import routers
-from routers import auth, users, discord, applications, events, admin, moderation
+from routers import auth, users, discord, applications, events, admin, moderation, games, rules
 
 # Import Discord bot
 from bot import DiscordBot
@@ -71,6 +71,8 @@ app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(discord.router, prefix="/discord", tags=["Discord"])
 app.include_router(applications.router, prefix="/applications", tags=["Applications"])
 app.include_router(events.router, prefix="/events", tags=["Events"])
+app.include_router(games.router, prefix="/games", tags=["Games"])
+app.include_router(rules.router, prefix="/rules", tags=["Rules"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 app.include_router(moderation.router, prefix="/moderation", tags=["Moderation"])
 

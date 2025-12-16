@@ -280,3 +280,86 @@ async def get_upcoming_events(limit: int = 5):
             event["date"] = event["date"].isoformat()
     
     return {"events": events}
+
+# Manager CRUD endpoints
+@router.put("/manager/{event_id}")
+async def update_event(
+    event_id: str,
+    event_data: EventCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an event (Manager only)"""
+    permissions = current_user.get("permissions", {})
+    if not permissions.get("can_manage_applications"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    db = get_database()
+    from bson import ObjectId
+    
+    try:
+        event_oid = ObjectId(event_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    
+    existing_event = await db.events.find_one({"_id": event_oid})
+    if not existing_event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    update_data = event_data.dict()
+    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_by"] = current_user["discord_id"]
+    
+    await db.events.update_one({"_id": event_oid}, {"$set": update_data})
+    
+    updated_event = await db.events.find_one({"_id": event_oid})
+    updated_event["_id"] = str(updated_event["_id"])
+    if "date" in updated_event:
+        updated_event["date"] = updated_event["date"].isoformat()
+    
+    return {"message": "Event updated successfully", "event": updated_event}
+
+@router.delete("/manager/{event_id}")
+async def delete_event(
+    event_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an event (Manager only)"""
+    permissions = current_user.get("permissions", {})
+    if not permissions.get("can_manage_applications"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    db = get_database()
+    from bson import ObjectId
+    
+    try:
+        event_oid = ObjectId(event_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    
+    result = await db.events.delete_one({"_id": event_oid})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    return {"message": "Event deleted successfully"}
+
+@router.get("/manager/all")
+async def get_all_events_manager(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all events for manager panel"""
+    permissions = current_user.get("permissions", {})
+    if not permissions.get("can_manage_applications"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    
+    db = get_database()
+    
+    events = await db.events.find({}).sort("date", -1).to_list(100)
+    
+    for event in events:
+        event["_id"] = str(event["_id"])
+        if "date" in event:
+            event["date"] = event["date"].isoformat()
+        event["participant_count"] = len(event.get("participants", []))
+    
+    return {"events": events, "count": len(events)}
