@@ -1,16 +1,34 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from datetime import datetime
 from database import get_database
 from utils import get_current_user, require_manager_or_admin
 from models import ApplicationCreate, Application
+import discord
+import os
 import re
 
 router = APIRouter()
 
+# Discord Configuration
+ACCEPTED_LOG_CHANNEL_ID = int(os.getenv('ACCEPTED_LOG_CHANNEL_ID', '1231990220589629441'))
+REJECTED_LOG_CHANNEL_ID = int(os.getenv('REJECTED_LOG_CHANNEL_ID', '1231990340353917008'))
+COMMUNITY_MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', '1228307652837249086'))
+APPLICATION_PENDING_ROLE_ID = int(os.getenv('APPLICATION_PENDING_ROLE_ID', '1359858065884844102'))
+SERVER_INVITE_LINK = os.getenv('SERVER_INVITE_LINK', 'https://discord.gg/Xdac4KHXfC')
+
+async def send_dm(bot, user_id: str, embed: discord.Embed) -> bool:
+    """Send DM to user, return success status"""
+    try:
+        user = await bot.bot.fetch_user(int(user_id))
+        await user.send(embed=embed)
+        return True
+    except:
+        return False
+
 # Validation schema for application fields
 REQUIRED_FIELDS = {
-    "personal": ["in_game_name", "age", "country"],
+    "personal": ["in_game_name", "date_of_birth", "country"],
     "gaming": ["primary_game", "gameplay_hours", "rank", "experience"],
     "motivation": ["reason", "contribution", "availability"]
 }
@@ -29,15 +47,29 @@ def validate_application_data(data: dict) -> dict:
             errors[field] = f"{field.replace('_', ' ').title()} is required"
     
     # Validate specific fields
-    if "age" in data:
+    if "date_of_birth" in data:
         try:
-            age = int(data["age"])
+            from datetime import datetime
+            dob = datetime.fromisoformat(data["date_of_birth"].replace('Z', '+00:00'))
+            today = datetime.now()
+            age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            
             if age < 13:
-                errors["age"] = "You must be at least 13 years old"
+                errors["date_of_birth"] = "You must be at least 13 years old"
             elif age > 100:
-                errors["age"] = "Please enter a valid age"
-        except (ValueError, TypeError):
-            errors["age"] = "Age must be a valid number"
+                errors["date_of_birth"] = "Please enter a valid date of birth"
+            
+            # Store calculated age
+            data["age"] = age
+        except (ValueError, TypeError) as e:
+            errors["date_of_birth"] = "Please enter a valid date"
+    
+    # Validate phone number (optional field)
+    if "phone" in data and data["phone"]:
+        phone = str(data["phone"]).strip()
+        # Basic phone validation (allows international format)
+        if len(phone) < 10 or not any(char.isdigit() for char in phone):
+            errors["phone"] = "Please enter a valid phone number"
     
     if "gameplay_hours" in data:
         try:
@@ -70,6 +102,12 @@ def validate_application_data(data: dict) -> dict:
         ign = data["in_game_name"]
         if len(ign) < 3 or len(ign) > 20:
             errors["in_game_name"] = "In-game name must be between 3 and 20 characters"
+    
+    # Validate country
+    if "country" in data:
+        country = data["country"].strip()
+        if len(country) < 2:
+            errors["country"] = "Please enter a valid country"
     
     return {
         "valid": len(errors) == 0,
@@ -459,14 +497,16 @@ async def get_all_applications_manager(
 @router.post("/manager/accept/{application_id}")
 async def accept_application(
     application_id: str,
+    request: Request,
     request_data: dict = {},
     manager: dict = Depends(require_manager_or_admin)
 ):
     """Accept an application - Manager access"""
     db = get_database()
+    bot = getattr(request.app.state, 'discord_bot', None)
     from bson import ObjectId
     
-    notes = request_data.get("notes") if request_data else None
+    notes = request_data.get("notes", "Welcome to Maestros!")
     
     try:
         application = await db.applications.find_one({"_id": ObjectId(application_id)})
@@ -481,6 +521,95 @@ async def accept_application(
             status_code=400,
             detail=f"Cannot accept application with status: {application['status']}"
         )
+    
+    user_id = application["user_id"]
+    
+    # Discord Integration
+    if bot and bot.is_ready:
+        try:
+            guild_id = int(os.getenv('DISCORD_GUILD_ID'))
+            guild = bot.bot.get_guild(guild_id)
+            
+            if guild:
+                # Get member
+                try:
+                    member = await guild.fetch_member(int(user_id))
+                    
+                    # Add Community Member role
+                    member_role = guild.get_role(COMMUNITY_MEMBER_ROLE_ID)
+                    if member_role:
+                        await member.add_roles(member_role, reason=f"Application accepted by {manager['username']}")
+                    
+                    # Remove Application Pending role
+                    pending_role = guild.get_role(APPLICATION_PENDING_ROLE_ID)
+                    if pending_role:
+                        await member.remove_roles(pending_role, reason="Application accepted")
+                    
+                    # Send DM
+                    accept_embed = discord.Embed(
+                        title="🎉 Welcome to Maestros Community!",
+                        description=f"Congratulations, {member.mention}! Your application has been **approved**!\n\nWe're excited to have you join our community of elite gamers.",
+                        color=0xFFD700
+                    )
+                    
+                    if guild.icon:
+                        accept_embed.set_thumbnail(url=guild.icon.url)
+                    
+                    accept_embed.add_field(
+                        name="✨ What's Next?",
+                        value="• Explore our server channels\n• Introduce yourself in the chat\n• Check out our game categories\n• Join voice channels and meet the community\n• Participate in events and tournaments",
+                        inline=False
+                    )
+                    
+                    if notes and len(notes) > 10:
+                        accept_embed.add_field(name="💬 Manager's Message", value=notes, inline=False)
+                    
+                    accept_embed.add_field(
+                        name="🎮 Quick Links",
+                        value=f"[Join Our Discord]({SERVER_INVITE_LINK}) • [Community Rules]({SERVER_INVITE_LINK}) • [Game Rosters]({SERVER_INVITE_LINK})",
+                        inline=False
+                    )
+                    
+                    accept_embed.set_footer(text=f"Welcome aboard! • {guild.name}", icon_url=guild.icon.url if guild.icon else None)
+                    accept_embed.timestamp = datetime.utcnow()
+                    
+                    await send_dm(bot, user_id, accept_embed)
+                    
+                    # Send to acceptance channel
+                    log_channel = bot.bot.get_channel(ACCEPTED_LOG_CHANNEL_ID)
+                    if log_channel:
+                        # Get manager member
+                        manager_member = None
+                        try:
+                            manager_member = await guild.fetch_member(int(manager['discord_id']))
+                        except:
+                            pass
+                        
+                        log_embed = discord.Embed(
+                            title="✅ Application Accepted",
+                            description=f"**Welcome to our server, {member.mention}!**\n\nCongratulations on being accepted to Maestros Community!",
+                            color=0x57F287,
+                            timestamp=datetime.utcnow()
+                        )
+                        log_embed.add_field(name="Applicant", value=f"{member.mention} ({member})", inline=True)
+                        log_embed.add_field(name="User ID", value=f"`{user_id}`", inline=True)
+                        log_embed.add_field(name="Application ID", value=f"`{application_id[:8]}`", inline=True)
+                        
+                        accepted_by_text = manager_member.mention if manager_member else manager['username']
+                        log_embed.add_field(name="Accepted By", value=accepted_by_text, inline=False)
+                        
+                        if notes:
+                            log_embed.add_field(name="Acceptance Notes", value=notes[:500], inline=False)
+                        
+                        log_embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
+                        log_embed.set_footer(text="🎉 Welcome to Maestros!")
+                        await log_channel.send(embed=log_embed)
+                        print(f"✅ Acceptance message sent to channel {ACCEPTED_LOG_CHANNEL_ID}")
+                    
+                except Exception as e:
+                    print(f"⚠️ Discord integration error: {e}")
+        except Exception as e:
+            print(f"❌ Failed Discord integration: {e}")
     
     # Update application status
     update_data = {
@@ -528,11 +657,13 @@ async def accept_application(
 @router.post("/manager/reject/{application_id}")
 async def reject_application(
     application_id: str,
+    request: Request,
     request_data: dict,
     manager: dict = Depends(require_manager_or_admin)
 ):
     """Reject an application - Manager access"""
     db = get_database()
+    bot = getattr(request.app.state, 'discord_bot', None)
     from bson import ObjectId
     
     reason = request_data.get("reason", "")
@@ -556,6 +687,97 @@ async def reject_application(
             status_code=400,
             detail=f"Cannot reject application with status: {application['status']}"
         )
+    
+    user_id = application["user_id"]
+    
+    # Discord Integration
+    member = None
+    if bot and bot.is_ready:
+        try:
+            guild_id = int(os.getenv('DISCORD_GUILD_ID'))
+            guild = bot.bot.get_guild(guild_id)
+            
+            if guild:
+                # Get member
+                try:
+                    member = await guild.fetch_member(int(user_id))
+                    
+                    # Remove Application Pending role
+                    pending_role = guild.get_role(APPLICATION_PENDING_ROLE_ID)
+                    if pending_role:
+                        await member.remove_roles(pending_role, reason=f"Application rejected by {manager['username']}")
+                    
+                    # Send DM
+                    from datetime import timedelta
+                    next_application_date = datetime.utcnow() + timedelta(days=30)
+                    
+                    reject_embed = discord.Embed(
+                        title="📋 Application Update",
+                        description=f"Thank you for your interest in **{guild.name}**.\n\nAfter careful review, we are unable to approve your application at this time.",
+                        color=0xED4245
+                    )
+                    
+                    if guild.icon:
+                        reject_embed.set_thumbnail(url=guild.icon.url)
+                    
+                    reject_embed.add_field(
+                        name="📝 Feedback from Manager",
+                        value=reason,
+                        inline=False
+                    )
+                    
+                    reject_embed.add_field(
+                        name="🔄 Reapplication Available",
+                        value=f"You can submit a new application starting **<t:{int(next_application_date.timestamp())}:F>**\n\n*That's <t:{int(next_application_date.timestamp())}:R> from now.*",
+                        inline=False
+                    )
+                    
+                    reject_embed.add_field(
+                        name="💡 Tips for Next Time",
+                        value="• Review our community guidelines\n• Provide more detailed responses\n• Show your dedication and experience\n• Be active in the community (if possible)",
+                        inline=False
+                    )
+                    
+                    reject_embed.set_footer(text=f"Thank you for your understanding • {guild.name}", icon_url=guild.icon.url if guild.icon else None)
+                    reject_embed.timestamp = datetime.utcnow()
+                    
+                    await send_dm(bot, user_id, reject_embed)
+                    
+                    # Send to rejection channel
+                    log_channel = bot.bot.get_channel(REJECTED_LOG_CHANNEL_ID)
+                    if log_channel:
+                        # Get manager member
+                        manager_member = None
+                        try:
+                            manager_member = await guild.fetch_member(int(manager['discord_id']))
+                        except:
+                            pass
+                        
+                        log_embed = discord.Embed(
+                            title="❌ Application Rejected",
+                            description="An application has been reviewed and rejected.",
+                            color=0xED4245,
+                            timestamp=datetime.utcnow()
+                        )
+                        
+                        log_embed.add_field(name="Applicant", value=f"{member.mention} ({member})", inline=True)
+                        log_embed.add_field(name="User ID", value=f"`{user_id}`", inline=True)
+                        log_embed.add_field(name="Application ID", value=f"`{application_id[:8]}`", inline=True)
+                        
+                        rejected_by_text = manager_member.mention if manager_member else manager['username']
+                        log_embed.add_field(name="Rejected By", value=rejected_by_text, inline=False)
+                        log_embed.add_field(name="Rejection Reason", value=reason[:500], inline=False)
+                        
+                        log_embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
+                        log_embed.set_footer(text="Application Decision")
+                        
+                        await log_channel.send(embed=log_embed)
+                        print(f"✅ Rejection message sent to channel {REJECTED_LOG_CHANNEL_ID}")
+                    
+                except Exception as e:
+                    print(f"⚠️ Discord integration error: {e}")
+        except Exception as e:
+            print(f"❌ Failed Discord integration: {e}")
     
     # Update application status
     await db.applications.update_one(

@@ -92,197 +92,197 @@ async def create_game(
     
     # Create Discord structures
     discord_info = {}
-    # try:
-    #     discord_bot = getattr(request.app.state, 'discord_bot', None)
-    #     if not discord_bot:
-    #         discord_bot = get_bot_instance()
+    try:
+        discord_bot = getattr(request.app.state, 'discord_bot', None)
+        if not discord_bot:
+            discord_bot = get_bot_instance()
         
-    #     if discord_bot and discord_bot.is_ready:
-    #         guild_id = int(os.getenv('DISCORD_GUILD_ID'))
-    #         guild = discord_bot.bot.get_guild(guild_id)
+        if discord_bot and discord_bot.is_ready:
+            guild_id = int(os.getenv('DISCORD_GUILD_ID'))
+            guild = discord_bot.bot.get_guild(guild_id)
             
-    #         if guild:
-    #             # Get role IDs from environment
-    #             COMMUNITY_CATEGORY_ID = int(os.getenv('COMMUNITY_CATEGORY_ID'))
-    #             MEMBERS_ROLE_ID = int(os.getenv('MEMBERS_EOLL_ROLE_ID'))  # Members role - game roles will be placed below this
-    #             EVERYONE_ROLE_ID = int(os.getenv('EVERYONE_ROLE_ID'))
-    #             MANAGER_ROLE_ID = int(os.getenv('MANAGER_ROLE_ID', 0))
-    #             CEO_ROLE_ID = int(os.getenv('CEO_ROLE_ID', 0))
-    #             MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', 0))
+            if guild:
+                # Get role IDs from environment
+                COMMUNITY_CATEGORY_ID = int(os.getenv('COMMUNITY_CATEGORY_ID'))
+                MEMBERS_ROLE_ID = int(os.getenv('MEMBERS_EOLL_ROLE_ID'))  # Members role - game roles will be placed below this
+                EVERYONE_ROLE_ID = int(os.getenv('EVERYONE_ROLE_ID'))
+                MANAGER_ROLE_ID = int(os.getenv('MANAGER_ROLE_ID', 0))
+                CEO_ROLE_ID = int(os.getenv('CEO_ROLE_ID', 0))
+                MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', 0))
                 
-    #             community_category = guild.get_channel(COMMUNITY_CATEGORY_ID)
-    #             members_role = guild.get_role(MEMBERS_ROLE_ID)  # This is the "Members" role shown in Discord
-    #             everyone_role = guild.get_role(EVERYONE_ROLE_ID)
-    #             manager_role = guild.get_role(MANAGER_ROLE_ID) if MANAGER_ROLE_ID else None
-    #             ceo_role = guild.get_role(CEO_ROLE_ID) if CEO_ROLE_ID else None
-    #             member_role = guild.get_role(MEMBER_ROLE_ID) if MEMBER_ROLE_ID else None
+                community_category = guild.get_channel(COMMUNITY_CATEGORY_ID)
+                members_role = guild.get_role(MEMBERS_ROLE_ID)  # This is the "Members" role shown in Discord
+                everyone_role = guild.get_role(EVERYONE_ROLE_ID)
+                manager_role = guild.get_role(MANAGER_ROLE_ID) if MANAGER_ROLE_ID else None
+                ceo_role = guild.get_role(CEO_ROLE_ID) if CEO_ROLE_ID else None
+                member_role = guild.get_role(MEMBER_ROLE_ID) if MEMBER_ROLE_ID else None
                 
-    #             if not community_category:
-    #                 raise Exception("Community category not found")
+                if not community_category:
+                    raise Exception("Community category not found")
                 
-    #             # Generate short tag from game name (first letters of each word)
-    #             game_words = game_data.name.split()
-    #             short_tag = ''.join([word[0].upper() for word in game_words if word])
+                # Generate short tag from game name (first letters of each word)
+                game_words = game_data.name.split()
+                short_tag = ''.join([word[0].upper() for word in game_words if word])
                 
-    #             # Step 1: Create game role
-    #             # Position: Below Members role (the one with 19 members in your screenshot)
-    #             target_role_position = members_role.position - 1 if members_role else 1  # -1 to place BELOW Members
+                # Step 1: Create game role
+                # Position: Below Members role (the one with 19 members in your screenshot)
+                target_role_position = members_role.position - 1 if members_role else 1  # -1 to place BELOW Members
                 
-    #             game_role = await guild.create_role(
-    #                 name=game_data.name,
-    #                 color=discord.Color.blue(),
-    #                 mentionable=True,
-    #                 reason=f"Auto-created for game: {game_data.name}"
-    #             )
+                game_role = await guild.create_role(
+                    name=game_data.name,
+                    color=discord.Color.blue(),
+                    mentionable=True,
+                    reason=f"Auto-created for game: {game_data.name}"
+                )
                 
-    #             # Move role to correct position (below members eoll)
-    #             await game_role.edit(position=target_role_position)
+                # Move role to correct position (below members eoll)
+                await game_role.edit(position=target_role_position)
                 
-    #             # Step 2: Create category with specific name format
-    #             category_name = f"⭑⭑★✪ 💕{game_data.name}💕 ✪★⭑⭑"
-    #             target_category_position = community_category.position + 1
+                # Step 2: Create category with specific name format
+                category_name = f"⭑⭑★✪ 💕{game_data.name}💕 ✪★⭑⭑"
+                target_category_position = community_category.position + 1
                 
-    #             # Set up category permissions
-    #             category_overwrites = {
-    #                 everyone_role: discord.PermissionOverwrite(
-    #                     view_channel=False,
-    #                     send_messages=False,
-    #                     connect=False,
-    #                     speak=False
-    #                 ),  # Everyone role has NO permissions
-    #                 game_role: discord.PermissionOverwrite(
-    #                     view_channel=True,
-    #                     send_messages=True,
-    #                     read_messages=True,
-    #                     connect=True,
-    #                     speak=True
-    #                 )
-    #             }
+                # Set up category permissions
+                category_overwrites = {
+                    everyone_role: discord.PermissionOverwrite(
+                        view_channel=False,
+                        send_messages=False,
+                        connect=False,
+                        speak=False
+                    ),  # Everyone role has NO permissions
+                    game_role: discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        read_messages=True,
+                        connect=True,
+                        speak=True
+                    )
+                }
                 
-    #             # Add member role permissions if exists
-    #             if member_role:
-    #                 category_overwrites[member_role] = discord.PermissionOverwrite(
-    #                     view_channel=True,
-    #                     send_messages=True,
-    #                     read_messages=True,
-    #                     connect=True,
-    #                     speak=True
-    #                 )
+                # Add member role permissions if exists
+                if member_role:
+                    category_overwrites[member_role] = discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        read_messages=True,
+                        connect=True,
+                        speak=True
+                    )
                 
-    #             # Add manager and CEO full permissions
-    #             if manager_role:
-    #                 category_overwrites[manager_role] = discord.PermissionOverwrite(
-    #                     view_channel=True,
-    #                     send_messages=True,
-    #                     read_messages=True,
-    #                     connect=True,
-    #                     speak=True,
-    #                     manage_channels=True,
-    #                     manage_permissions=True
-    #                 )
-    #             if ceo_role:
-    #                 category_overwrites[ceo_role] = discord.PermissionOverwrite(
-    #                     view_channel=True,
-    #                     send_messages=True,
-    #                     read_messages=True,
-    #                     connect=True,
-    #                     speak=True,
-    #                     manage_channels=True,
-    #                     manage_permissions=True
-    #                 )
+                # Add manager and CEO full permissions
+                if manager_role:
+                    category_overwrites[manager_role] = discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        read_messages=True,
+                        connect=True,
+                        speak=True,
+                        manage_channels=True,
+                        manage_permissions=True
+                    )
+                if ceo_role:
+                    category_overwrites[ceo_role] = discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        read_messages=True,
+                        connect=True,
+                        speak=True,
+                        manage_channels=True,
+                        manage_permissions=True
+                    )
                 
-    #             # Create category
-    #             game_category = await guild.create_category(
-    #                 name=category_name,
-    #                 position=target_category_position,
-    #                 overwrites=category_overwrites,
-    #                 reason=f"Auto-created for game: {game_data.name}"
-    #             )
+                # Create category
+                game_category = await guild.create_category(
+                    name=category_name,
+                    position=target_category_position,
+                    overwrites=category_overwrites,
+                    reason=f"Auto-created for game: {game_data.name}"
+                )
                 
-    #             # Step 3: Create Announcement Channel
-    #             announcement_overwrites = {
-    #                 everyone_role: discord.PermissionOverwrite(view_channel=False, send_messages=False),
-    #                 game_role: discord.PermissionOverwrite(view_channel=True, send_messages=False),  # View only
-    #             }
+                # Step 3: Create Announcement Channel
+                announcement_overwrites = {
+                    everyone_role: discord.PermissionOverwrite(view_channel=False, send_messages=False),
+                    game_role: discord.PermissionOverwrite(view_channel=True, send_messages=False),  # View only
+                }
                 
-    #             if member_role:
-    #                 announcement_overwrites[member_role] = discord.PermissionOverwrite(view_channel=True, send_messages=False)  # View only
+                if member_role:
+                    announcement_overwrites[member_role] = discord.PermissionOverwrite(view_channel=True, send_messages=False)  # View only
                 
-    #             if manager_role:
-    #                 announcement_overwrites[manager_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)  # Can send
-    #             if ceo_role:
-    #                 announcement_overwrites[ceo_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)  # Can send
+                if manager_role:
+                    announcement_overwrites[manager_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)  # Can send
+                if ceo_role:
+                    announcement_overwrites[ceo_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)  # Can send
                 
-    #             announcement_channel = await guild.create_text_channel(
-    #                 name=f"📰｜{game_data.name} 𝐀𝚗𝚗𝚘𝚞𝚗𝚌𝚎𝚖𝚎𝚗𝚝𝚜",
-    #                 category=game_category,
-    #                 topic=f"Official announcements for {game_data.name} - Managers only",
-    #                 overwrites=announcement_overwrites,
-    #                 reason=f"Auto-created announcement channel for game: {game_data.name}"
-    #             )
+                announcement_channel = await guild.create_text_channel(
+                    name=f"📰｜{game_data.name} 𝐀𝚗𝚗𝚘𝚞𝚗𝚌𝚎𝚖𝚎𝚗𝚝𝚜",
+                    category=game_category,
+                    topic=f"Official announcements for {game_data.name} - Managers only",
+                    overwrites=announcement_overwrites,
+                    reason=f"Auto-created announcement channel for game: {game_data.name}"
+                )
                 
-    #             # Step 4: Create Chat Channels
-    #             chat_channel_1 = await guild.create_text_channel(
-    #                 name=f"💌｜{short_tag} 𝐂𝚑𝚊𝚝 1",
-    #                 category=game_category,
-    #                 topic=f"General chat 1 for {game_data.name}",
-    #                 reason=f"Auto-created chat channel for game: {game_data.name}"
-    #             )
+                # Step 4: Create Chat Channels
+                chat_channel_1 = await guild.create_text_channel(
+                    name=f"💌｜{short_tag} 𝐂𝚑𝚊𝚝 1",
+                    category=game_category,
+                    topic=f"General chat 1 for {game_data.name}",
+                    reason=f"Auto-created chat channel for game: {game_data.name}"
+                )
                 
-    #             chat_channel_2 = await guild.create_text_channel(
-    #                 name=f"💌｜{short_tag} IC Name/ID",
-    #                 category=game_category,
-    #                 topic=f"IC Name/ID for {game_data.name}",
-    #                 reason=f"Auto-created chat channel for game: {game_data.name}"
-    #             )
+                chat_channel_2 = await guild.create_text_channel(
+                    name=f"💌｜{short_tag} IC Name/ID",
+                    category=game_category,
+                    topic=f"IC Name/ID for {game_data.name}",
+                    reason=f"Auto-created chat channel for game: {game_data.name}"
+                )
                 
-    #             # Step 5: Create Voice Channels
-    #             voice_channel_1 = await guild.create_voice_channel(
-    #                 name=f"🔊｜{short_tag} 𝐕𝙲 1",
-    #                 category=game_category,
-    #                 reason=f"Auto-created voice channel for game: {game_data.name}"
-    #             )
+                # Step 5: Create Voice Channels
+                voice_channel_1 = await guild.create_voice_channel(
+                    name=f"🔊｜{short_tag} 𝐕𝙲 1",
+                    category=game_category,
+                    reason=f"Auto-created voice channel for game: {game_data.name}"
+                )
                 
-    #             voice_channel_2 = await guild.create_voice_channel(
-    #                 name=f"🔊｜{short_tag} 𝐕𝙲 2",
-    #                 category=game_category,
-    #                 reason=f"Auto-created voice channel for game: {game_data.name}"
-    #             )
+                voice_channel_2 = await guild.create_voice_channel(
+                    name=f"🔊｜{short_tag} 𝐕𝙲 2",
+                    category=game_category,
+                    reason=f"Auto-created voice channel for game: {game_data.name}"
+                )
                 
-    #             # Store Discord info in game document
-    #             discord_info = {
-    #                 "category_id": str(game_category.id),
-    #                 "category_name": category_name,
-    #                 "role_id": str(game_role.id),
-    #                 "short_tag": short_tag,
-    #                 "channels": {
-    #                     "announcement": str(announcement_channel.id),
-    #                     "chat_1": str(chat_channel_1.id),
-    #                     "chat_2": str(chat_channel_2.id),
-    #                     "voice_1": str(voice_channel_1.id),
-    #                     "voice_2": str(voice_channel_2.id)
-    #                 }
-    #             }
+                # Store Discord info in game document
+                discord_info = {
+                    "category_id": str(game_category.id),
+                    "category_name": category_name,
+                    "role_id": str(game_role.id),
+                    "short_tag": short_tag,
+                    "channels": {
+                        "announcement": str(announcement_channel.id),
+                        "chat_1": str(chat_channel_1.id),
+                        "chat_2": str(chat_channel_2.id),
+                        "voice_1": str(voice_channel_1.id),
+                        "voice_2": str(voice_channel_2.id)
+                    }
+                }
                 
-    #             # Update game with Discord info
-    #             await db.games.update_one(
-    #                 {"_id": result.inserted_id},
-    #                 {"$set": {"discord_info": discord_info}}
-    #             )
+                # Update game with Discord info
+                await db.games.update_one(
+                    {"_id": result.inserted_id},
+                    {"$set": {"discord_info": discord_info}}
+                )
                 
-    #             new_game["discord_info"] = discord_info
+                new_game["discord_info"] = discord_info
                 
-    #             print(f"✅ Successfully created Discord structures for game: {game_data.name}")
-    #             print(f"   Category: {category_name}")
-    #             print(f"   Role: {game_data.name} (positioned below Members role)")
-    #             print(f"   Short Tag: {short_tag}")
-    #             print(f"   Channels: 1 announcement, 2 chat, 2 voice")
+                print(f"✅ Successfully created Discord structures for game: {game_data.name}")
+                print(f"   Category: {category_name}")
+                print(f"   Role: {game_data.name} (positioned below Members role)")
+                print(f"   Short Tag: {short_tag}")
+                print(f"   Channels: 1 announcement, 2 chat, 2 voice")
                 
-    # except Exception as e:
-    #     print(f"❌ Failed to create Discord structures: {str(e)}")
-    #     import traceback
-    #     traceback.print_exc()
-    #     # Don't fail the game creation if Discord creation fails
+    except Exception as e:
+        print(f"❌ Failed to create Discord structures: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Don't fail the game creation if Discord creation fails
     
     return {
         "message": "Game created successfully",

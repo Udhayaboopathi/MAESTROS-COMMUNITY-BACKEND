@@ -128,6 +128,67 @@ class DiscordBot:
             else:
                 print(f'Bot Error: {error}')
                 await ctx.send('❌ An error occurred while processing the command.')
+        
+        @self.bot.event
+        async def on_interaction(interaction: discord.Interaction):
+            """Handle button interactions for applications"""
+            if interaction.type != discord.InteractionType.modal_submit:
+                return
+            
+            # Check if user is CEO or Manager
+            role_ids = [role.id for role in interaction.user.roles]
+            if self.ceo_role_id not in role_ids and self.manager_role_id not in role_ids:
+                await interaction.response.send_message("❌ Only CEOs and Managers can review applications.", ephemeral=True)
+                return
+            
+            custom_id = interaction.data.get('custom_id', '')
+            
+            if custom_id.startswith('accept_modal_'):
+                await self._handle_accept(interaction)
+            elif custom_id.startswith('reject_modal_'):
+                await self._handle_reject(interaction)
+        
+        async def _handle_accept(self, interaction: discord.Interaction):
+            """Process application acceptance"""
+            try:
+                # Extract application ID from modal custom_id
+                app_id = interaction.data['custom_id'].replace('accept_modal_', '')
+                notes = interaction.data.get('components', [[]])[0].get('components', [[]])[0].get('value', '')
+                
+                # Call backend API to process acceptance
+                backend_url = f"http://localhost:{os.getenv('API_PORT', 8000)}"
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{backend_url}/application-manager/manager/accept/{app_id}",
+                        json={"notes": notes, "manager_id": str(interaction.user.id)}
+                    ) as resp:
+                        if resp.status == 200:
+                            await interaction.response.send_message("✅ Application accepted successfully!", ephemeral=True)
+                        else:
+                            await interaction.response.send_message("❌ Failed to accept application.", ephemeral=True)
+            except Exception as e:
+                print(f"Error handling accept: {e}")
+                await interaction.response.send_message("❌ An error occurred.", ephemeral=True)
+        
+        async def _handle_reject(self, interaction: discord.Interaction):
+            """Process application rejection"""
+            try:
+                app_id = interaction.data['custom_id'].replace('reject_modal_', '')
+                reason = interaction.data.get('components', [[]])[0].get('components', [[]])[0].get('value', '')
+                
+                backend_url = f"http://localhost:{os.getenv('API_PORT', 8000)}"
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{backend_url}/application-manager/manager/reject/{app_id}",
+                        json={"reason": reason, "manager_id": str(interaction.user.id)}
+                    ) as resp:
+                        if resp.status == 200:
+                            await interaction.response.send_message("❌ Application rejected.", ephemeral=True)
+                        else:
+                            await interaction.response.send_message("❌ Failed to reject application.", ephemeral=True)
+            except Exception as e:
+                print(f"Error handling reject: {e}")
+                await interaction.response.send_message("❌ An error occurred.", ephemeral=True)
     
     def _setup_commands(self):
         """Setup Discord bot commands"""

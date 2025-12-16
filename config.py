@@ -14,13 +14,23 @@ class Settings(BaseSettings):
     ceo_role_id: str = ""
     manager_role_id: str = ""
     member_role_id: str = ""  # Regular member role, not management
+    application_pending_role_id: str = ""  # Application pending role
     rules_category_id: str = ""  # Discord Rules Category ID
     rp_invite_channel_id: str = ""  # Channel ID for RP server invite requests
+    
+    # Application System Channels
+    application_channel_id: str = ""  # Channel for application reviews
+    accepted_log_channel_id: str = ""  # Channel for accepted applications log
+    rejected_log_channel_id: str = ""  # Channel for rejected applications log
+    audit_log_channel_id: str = ""  # Private audit log channel
     
     # Discord Role Structure for Game Creation
     members_eoll_role_id: str = ""  # Members role ID - game roles will be placed below this role
     everyone_role_id: str = ""  # Everyone role ID for permission removal
     community_category_id: str = ""  # Community category ID for positioning game categories
+    
+    # Server invite link
+    server_invite_link: str = "https://discord.gg/Xdac4KHXfC"  # Discord server invite link
     
     # Discord OAuth
     discord_client_id: str
