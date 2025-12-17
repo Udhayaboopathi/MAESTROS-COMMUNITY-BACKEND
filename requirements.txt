@@ -1,6 +1,7 @@
 # Web Framework
 fastapi==0.115.0
 uvicorn[standard]==0.34.0
+gunicorn
 
 # Discord Integration
 discord.py==2.6.4
