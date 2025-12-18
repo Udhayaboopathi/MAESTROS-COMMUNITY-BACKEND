@@ -32,6 +32,13 @@ async def lifespan(app: FastAPI):
     await connect_to_mongo()
     print("✅ MongoDB connected")
     
+    # Create database indexes for optimal performance
+    try:
+        from database_indexes import create_indexes
+        await create_indexes()
+    except Exception as e:
+        print(f"⚠️  Warning: Could not create indexes: {str(e)}")
+    
     # Start Discord bot in background
     discord_bot = DiscordBot()
     asyncio.create_task(discord_bot.start_bot())
@@ -118,6 +125,25 @@ async def bot_status():
         "guilds": len(discord_bot.bot.guilds) if discord_bot.bot else 0,
         "latency": round(discord_bot.bot.latency * 1000) if discord_bot.bot else 0
     }
+
+@app.get("/cache/status")
+async def cache_status():
+    """Get cache statistics"""
+    try:
+        from cache import get_cache_stats
+        return get_cache_stats()
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Clear all caches (admin only in production)"""
+    try:
+        from cache import clear_all_caches
+        clear_all_caches()
+        return {"message": "All caches cleared successfully"}
+    except Exception as e:
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

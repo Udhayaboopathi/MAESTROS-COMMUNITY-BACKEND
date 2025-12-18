@@ -30,3 +30,6 @@ python-multipart
 python-dateutil
 email-validator
 websockets
+
+# Caching
+cachetools

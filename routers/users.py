@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from database import get_database
 from utils import get_current_user, calculate_level
+from cache import cache_user_data, invalidate_user_cache
 from datetime import datetime
 import os
 
@@ -68,13 +69,17 @@ def get_bot_instance():
     import main
     return main.discord_bot
 
-@router.get("")
-async def get_all_members():
-    """Get all community members from database"""
+@cache_user_data(ttl=300)  # Cache for 5 minutes
+async def _get_all_members_cached(limit: int, skip: int):
+    """Internal cached function for getting all members"""
     db = get_database()
     
-    # Fetch all users from database
-    users = await db.users.find().to_list(None)
+    # Fetch users with pagination and only needed fields
+    users = await db.users.find({}, {
+        "discord_id": 1, "username": 1, "display_name": 1, "discriminator": 1,
+        "avatar": 1, "level": 1, "xp": 1, "badges": 1, "guild_roles": 1,
+        "permissions": 1, "joined_at": 1, "last_login": 1
+    }).skip(skip).limit(limit).to_list(limit)
     
     members = []
     for user in users:
@@ -105,6 +110,11 @@ async def get_all_members():
         members.append(member_data)
     
     return members
+
+@router.get("")
+async def get_all_members(limit: int = 100, skip: int = 0):
+    """Get all community members from database with pagination and caching"""
+    return await _get_all_members_cached(limit, skip)
 
 @router.get("/me")
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):

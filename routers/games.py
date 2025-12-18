@@ -4,6 +4,7 @@ from database import get_database
 from utils import get_current_user, require_manager_or_admin
 from datetime import datetime
 from pydantic import BaseModel
+from cache import cache_game_data, invalidate_game_cache
 import discord
 import os
 
@@ -32,23 +33,32 @@ class GameUpdate(BaseModel):
     clan: Optional[str] = None
     active: Optional[bool] = None
 
-@router.get("")
-async def get_games(
-    active_only: bool = False,
-    limit: int = 100,
-    skip: int = 0
-):
-    """Get all games (public endpoint)"""
+@cache_game_data(ttl=600)  # Cache for 10 minutes
+async def _get_games_cached(active_only: bool, limit: int, skip: int):
+    """Internal cached function for getting games"""
     db = get_database()
     
     query = {"active": True} if active_only else {}
-    games = await db.games.find(query).skip(skip).limit(limit).to_list(limit)
+    # Use projection to only fetch needed fields for better performance
+    games = await db.games.find(query, {
+        "_id": 1, "name": 1, "description": 1, "image_url": 1,
+        "category": 1, "platform": 1, "clan": 1, "active": 1
+    }).skip(skip).limit(limit).to_list(limit)
     
     # Convert ObjectId to string
     for game in games:
         game["_id"] = str(game["_id"])
     
     return {"games": games, "count": len(games)}
+
+@router.get("")
+async def get_games(
+    active_only: bool = False,
+    limit: int = 100,
+    skip: int = 0
+):
+    """Get all games (public endpoint) - with caching"""
+    return await _get_games_cached(active_only, limit, skip)
 
 @router.get("/{game_id}")
 async def get_game(game_id: str):
@@ -86,6 +96,9 @@ async def create_game(
     
     # Insert game into database first
     result = await db.games.insert_one(game_dict)
+    
+    # Invalidate game cache since we added a new game
+    invalidate_game_cache()
     
     new_game = await db.games.find_one({"_id": result.inserted_id})
     new_game["_id"] = str(new_game["_id"])
@@ -318,6 +331,9 @@ async def update_game(
     
     await db.games.update_one({"_id": game_oid}, {"$set": update_data})
     
+    # Invalidate game cache since we updated a game
+    invalidate_game_cache()
+    
     updated_game = await db.games.find_one({"_id": game_oid})
     updated_game["_id"] = str(updated_game["_id"])
     
@@ -345,6 +361,9 @@ async def delete_game(
     
     # Delete game from database
     result = await db.games.delete_one({"_id": game_oid})
+    
+    # Invalidate game cache since we deleted a game
+    invalidate_game_cache()
     
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Game not found")
