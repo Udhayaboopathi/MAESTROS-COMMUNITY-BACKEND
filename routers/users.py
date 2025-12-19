@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from database import get_database
-from utils import get_current_user, calculate_level
+from utils import get_current_user, calculate_level, get_discord_bot
 from cache import cache_user_data, invalidate_user_cache
 from datetime import datetime
 import os

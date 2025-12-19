@@ -110,7 +110,8 @@ async def callback(code: str, request: Request):
             "avatar": user_data.get("avatar"),
             "email": user_data.get("email"),
             "last_login": datetime.utcnow(),
-            "guild_roles": guild_roles,  
+            "guild_roles": guild_roles,
+            "is_member": is_member,
         }
         
         if existing_user:
@@ -181,9 +182,8 @@ async def get_me(current_user: dict = Depends(get_current_user), request: Reques
                     if member.avatar:
                         avatar = member.avatar.key
                     
-                    # Get role names
-                    role_names = [role.name for role in member.roles if role.name != "@everyone"]
-                    guild_roles = role_names
+                    # Get role IDs
+                    guild_roles = [str(role.id) for role in member.roles if role.name != "@everyone"]
                     
                     discord_details = {
                         "global_name": member.global_name,
@@ -242,6 +242,11 @@ async def get_me(current_user: dict = Depends(get_current_user), request: Reques
         except Exception as e:
             print(f"⚠️ Could not fetch Discord details: {str(e)}")
     
+    # Check if user has member role
+    member_role_id = settings.member_role_id
+    has_member_role = member_role_id in guild_roles if guild_roles else False
+    print(f"🔍 Member Role Check - User: {current_user['discord_id']}, Member Role ID: {member_role_id}, Guild Roles: {guild_roles}, Has Member Role: {has_member_role}")
+    
     return {
         "id": str(current_user["_id"]),
         "discord_id": current_user["discord_id"],
@@ -257,6 +262,8 @@ async def get_me(current_user: dict = Depends(get_current_user), request: Reques
         "badges": current_user.get("badges", []),
         "joined_at": current_user.get("joined_at"),
         "last_login": current_user.get("last_login"),
+        "is_member": current_user.get("is_member", False),
+        "has_member_role": has_member_role,
         "discord_details": discord_details,  # All Discord-specific info
         "permissions": {
             "is_admin": is_admin,

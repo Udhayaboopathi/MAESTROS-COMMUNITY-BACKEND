@@ -3,6 +3,7 @@ from typing import Dict, List
 from pydantic import BaseModel
 from database import get_database
 from utils import get_discord_bot, DiscordRoles
+from config import settings
 import discord
 
 router = APIRouter()
@@ -36,7 +37,7 @@ async def get_all_guild_members(request: Request):
     MEMBER_ROLE_ID = DiscordRoles.MEMBER_ROLE_ID
     
     # Get guild
-    guild_id = int(os.getenv('DISCORD_GUILD_ID'))
+    guild_id = int(settings.discord_guild_id)
     guild = discord_bot.bot.get_guild(guild_id)
     
     if not guild:
@@ -140,6 +141,196 @@ async def get_user_details(discord_id: str):
     
     return user
 
+@router.get("/guilds")
+async def get_guilds(request: Request):
+    """Get list of Discord guilds the bot is in"""
+    discord_bot = get_discord_bot(request)
+    
+    if not discord_bot or not discord_bot.is_ready:
+        raise HTTPException(status_code=503, detail="Discord bot not connected")
+    
+    guilds = []
+    for guild in discord_bot.bot.guilds:
+        guilds.append({
+            "id": str(guild.id),
+            "name": guild.name
+        })
+    
+    return guilds
+
+@router.get("/guilds/{guild_id}/channels")
+async def get_guild_channels(guild_id: str, request: Request):
+    """Get list of channels in a guild"""
+    discord_bot = get_discord_bot(request)
+    
+    if not discord_bot or not discord_bot.is_ready:
+        raise HTTPException(status_code=503, detail="Discord bot not connected")
+    
+    guild = discord_bot.bot.get_guild(int(guild_id))
+    if not guild:
+        raise HTTPException(status_code=404, detail="Guild not found")
+    
+    channels = []
+    for channel in guild.channels:
+        if isinstance(channel, discord.TextChannel):
+            channels.append({
+                "id": str(channel.id),
+                "name": channel.name,
+                "type": 0  # Text channel
+            })
+    
+    return channels
+
+@router.get("/guilds/{guild_id}/roles")
+async def get_guild_roles(guild_id: str, request: Request):
+    """Get list of roles in a guild"""
+    discord_bot = get_discord_bot(request)
+    
+    if not discord_bot or not discord_bot.is_ready:
+        raise HTTPException(status_code=503, detail="Discord bot not connected")
+    
+    guild = discord_bot.bot.get_guild(int(guild_id))
+    if not guild:
+        raise HTTPException(status_code=404, detail="Guild not found")
+    
+    roles = []
+    for role in guild.roles:
+        if role.name != "@everyone":
+            roles.append({
+                "id": str(role.id),
+                "name": role.name
+            })
+    
+    return roles
+
+@router.get("/guilds/{guild_id}/members")
+async def get_guild_members_list(guild_id: str, request: Request):
+    """Get list of members in a guild"""
+    discord_bot = get_discord_bot(request)
+    
+    if not discord_bot or not discord_bot.is_ready:
+        raise HTTPException(status_code=503, detail="Discord bot not connected")
+    
+    guild = discord_bot.bot.get_guild(int(guild_id))
+    if not guild:
+        raise HTTPException(status_code=404, detail="Guild not found")
+    
+    members = []
+    for member in guild.members:
+        if not member.bot:
+            members.append({
+                "user": {
+                    "id": str(member.id),
+                    "username": member.name,
+                    "discriminator": member.discriminator if member.discriminator != '0' else '0000',
+                    "display_name": member.display_name
+                }
+            })
+    
+    return members
+
+class AnnouncementRequest(BaseModel):
+    channel_id: str
+    content: str = ""
+    mention_everyone: bool = False
+    mention_here: bool = False
+    mention_roles: List[str] = []
+    mention_users: List[str] = []
+    embed: Dict = None
+
+@router.post("/send-announcement")
+async def send_announcement(request: Request, data: AnnouncementRequest):
+    """Send announcement to Discord channel"""
+    discord_bot = get_discord_bot(request)
+    
+    if not discord_bot or not discord_bot.is_ready:
+        raise HTTPException(status_code=503, detail="Discord bot not connected")
+    
+    try:
+        channel = discord_bot.bot.get_channel(int(data.channel_id))
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        
+        # Build message content with mentions
+        message_content = data.content
+        
+        if data.mention_everyone:
+            message_content = f"@everyone {message_content}"
+        elif data.mention_here:
+            message_content = f"@here {message_content}"
+        
+        # Add role mentions
+        if data.mention_roles:
+            role_mentions = " ".join([f"<@&{role_id}>" for role_id in data.mention_roles])
+            message_content = f"{role_mentions} {message_content}"
+        
+        # Add user mentions
+        if data.mention_users:
+            user_mentions = " ".join([f"<@{user_id}>" for user_id in data.mention_users])
+            message_content = f"{user_mentions} {message_content}"
+        
+        # Create embed if provided
+        embed_obj = None
+        if data.embed:
+            # Only create embed if there's actual content
+            title = data.embed.get("title") if data.embed.get("title") else None
+            description = data.embed.get("description") if data.embed.get("description") else None
+            
+            # Discord requires at least title or description
+            if title or description:
+                embed_obj = discord.Embed(
+                    color=data.embed.get("color", 0xFFD700)
+                )
+                
+                if title:
+                    embed_obj.title = title
+                if description:
+                    embed_obj.description = description
+                
+                if data.embed.get("thumbnail") and data.embed["thumbnail"].get("url"):
+                    try:
+                        embed_obj.set_thumbnail(url=data.embed["thumbnail"]["url"])
+                    except:
+                        pass
+                
+                if data.embed.get("image") and data.embed["image"].get("url"):
+                    try:
+                        embed_obj.set_image(url=data.embed["image"]["url"])
+                    except:
+                        pass
+                
+                if data.embed.get("footer") and data.embed["footer"].get("text"):
+                    embed_obj.set_footer(text=data.embed["footer"]["text"])
+                
+                if data.embed.get("author") and data.embed["author"].get("name"):
+                    embed_obj.set_author(name=data.embed["author"]["name"])
+                
+                if data.embed.get("fields"):
+                    for field in data.embed["fields"]:
+                        if field.get("name") and field.get("value"):
+                            embed_obj.add_field(
+                                name=field.get("name"),
+                                value=field.get("value"),
+                                inline=field.get("inline", False)
+                            )
+        
+        # Send message
+        if embed_obj and message_content.strip():
+            await channel.send(content=message_content.strip(), embed=embed_obj)
+        elif embed_obj:
+            await channel.send(embed=embed_obj)
+        elif message_content.strip():
+            await channel.send(content=message_content.strip())
+        else:
+            raise HTTPException(status_code=400, detail="Message must have content or embed")
+        
+        return {"success": True, "message": "Announcement sent successfully"}
+    
+    except discord.Forbidden:
+        raise HTTPException(status_code=403, detail="Bot doesn't have permission to send messages in that channel")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send announcement: {str(e)}")
+
 class ServerInviteRequest(BaseModel):
     server_name: str
     owner_name: str
@@ -152,15 +343,14 @@ class ServerInviteRequest(BaseModel):
 @router.post("/send-invite-request")
 async def send_invite_request(request: Request, data: ServerInviteRequest):
     """Send RP Server invite request to Discord channel"""
-    discord_bot = getattr(request.app.state, 'discord_bot', None)
-    if not discord_bot:
-        discord_bot = get_bot_instance()
+    # Get Discord bot instance using centralized helper
+    discord_bot = get_discord_bot(request)
     
     if not discord_bot or not discord_bot.is_ready:
         raise HTTPException(status_code=503, detail="Discord bot not connected")
     
-    # Get channel ID from environment variable
-    channel_id = os.getenv('RP_INVITE_CHANNEL_ID')
+    # Get channel ID from settings
+    channel_id = settings.rp_invite_channel_id
     if not channel_id:
         raise HTTPException(status_code=500, detail="RP invite channel not configured")
     

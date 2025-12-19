@@ -56,6 +56,19 @@ async def create_indexes():
         await db.activity.create_index([("timestamp", -1)])
         print("✅ Created index on activity.timestamp (descending)")
         
+        # Announcement logs indexes
+        await db.announcement_logs.create_index([("timestamp", -1)])
+        print("✅ Created index on announcement_logs.timestamp (descending)")
+        
+        await db.announcement_logs.create_index("manager_id")
+        print("✅ Created index on announcement_logs.manager_id")
+        
+        await db.announcement_logs.create_index("guild_id")
+        print("✅ Created index on announcement_logs.guild_id")
+        
+        await db.announcement_logs.create_index("success")
+        print("✅ Created index on announcement_logs.success")
+        
         # Events collection indexes
         await db.events.create_index("status")
         print("✅ Created index on events.status")
