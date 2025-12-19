@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from database import get_database
-from utils import get_current_user, require_manager_or_admin
+from utils import get_current_user, require_manager_or_admin, get_discord_bot, DiscordRoles
 from datetime import datetime
 from pydantic import BaseModel
 from cache import cache_game_data, invalidate_game_cache
@@ -9,11 +9,6 @@ import discord
 import os
 
 router = APIRouter()
-
-def get_bot_instance():
-    """Get the Discord bot instance from main"""
-    import main
-    return main.discord_bot
 
 class GameCreate(BaseModel):
     name: str
@@ -106,29 +101,26 @@ async def create_game(
     # Create Discord structures
     discord_info = {}
     try:
-        discord_bot = getattr(request.app.state, 'discord_bot', None)
-        if not discord_bot:
-            discord_bot = get_bot_instance()
+        discord_bot = get_discord_bot(request)
         
         if discord_bot and discord_bot.is_ready:
+            import os
             guild_id = int(os.getenv('DISCORD_GUILD_ID'))
             guild = discord_bot.bot.get_guild(guild_id)
             
             if guild:
-                # Get role IDs from environment
+                # Get IDs from centralized sources
                 COMMUNITY_CATEGORY_ID = int(os.getenv('COMMUNITY_CATEGORY_ID'))
-                MEMBERS_ROLE_ID = int(os.getenv('MEMBERS_EOLL_ROLE_ID'))  # Members role - game roles will be placed below this
-                EVERYONE_ROLE_ID = int(os.getenv('EVERYONE_ROLE_ID'))
-                MANAGER_ROLE_ID = int(os.getenv('MANAGER_ROLE_ID', 0))
-                CEO_ROLE_ID = int(os.getenv('CEO_ROLE_ID', 0))
-                MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', 0))
+                MEMBER_ROLE_ID = DiscordRoles.MEMBER_ROLE_ID
+                EVERYONE_ROLE_ID = DiscordRoles.EVERYONE_ROLE_ID
+                MANAGER_ROLE_ID = DiscordRoles.MANAGER_ROLE_ID
+                CEO_ROLE_ID = DiscordRoles.CEO_ROLE_ID
                 
                 community_category = guild.get_channel(COMMUNITY_CATEGORY_ID)
-                members_role = guild.get_role(MEMBERS_ROLE_ID)  # This is the "Members" role shown in Discord
+                member_role = guild.get_role(MEMBER_ROLE_ID)  # This is the "Members" role shown in Discord
                 everyone_role = guild.get_role(EVERYONE_ROLE_ID)
                 manager_role = guild.get_role(MANAGER_ROLE_ID) if MANAGER_ROLE_ID else None
                 ceo_role = guild.get_role(CEO_ROLE_ID) if CEO_ROLE_ID else None
-                member_role = guild.get_role(MEMBER_ROLE_ID) if MEMBER_ROLE_ID else None
                 
                 if not community_category:
                     raise Exception("Community category not found")
@@ -139,7 +131,7 @@ async def create_game(
                 
                 # Step 1: Create game role
                 # Position: Below Members role (the one with 19 members in your screenshot)
-                target_role_position = members_role.position - 1 if members_role else 1  # -1 to place BELOW Members
+                target_role_position = member_role.position - 1 if member_role else 1  # -1 to place BELOW Members
                 
                 game_role = await guild.create_role(
                     name=game_data.name,
@@ -148,7 +140,7 @@ async def create_game(
                     reason=f"Auto-created for game: {game_data.name}"
                 )
                 
-                # Move role to correct position (below members eoll)
+                # Move role to correct position (below member role)
                 await game_role.edit(position=target_role_position)
                 
                 # Step 2: Create category with specific name format

@@ -63,12 +63,6 @@ def get_highest_role(role_ids: List[int], discord_roles=None) -> dict:
     
     return {"name": None, "color": "#99AAB5", "priority": 999}
 
-# Access to global bot instance
-def get_bot_instance():
-    """Get the Discord bot instance from main"""
-    import main
-    return main.discord_bot
-
 @cache_user_data(ttl=300)  # Cache for 5 minutes
 async def _get_all_members_cached(limit: int, skip: int):
     """Internal cached function for getting all members"""
@@ -191,9 +185,7 @@ async def get_user_by_id(user_id: str, request: Request):
     user = await db.users.find_one({"discord_id": user_id})
     
     # Try to get Discord bot instance (first from app state, then from global)
-    discord_bot = getattr(request.app.state, 'discord_bot', None)
-    if not discord_bot:
-        discord_bot = get_bot_instance()
+    discord_bot = get_discord_bot(request)
     
     # Initialize base user data
     # Extract account creation date from Discord ID

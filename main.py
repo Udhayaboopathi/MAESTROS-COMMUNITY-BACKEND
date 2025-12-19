@@ -63,21 +63,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Middleware - MUST be added BEFORE routers
-allowed_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://4.186.28.20",
-    "http://4.186.28.20:3000",
-]
-
-# Add origins from settings if configured
-if settings.cors_origins_list:
-    allowed_origins.extend(settings.cors_origins_list)
-
+# CORS Middleware - Use origins from settings only
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

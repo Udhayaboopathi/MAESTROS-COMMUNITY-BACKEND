@@ -25,6 +25,8 @@ class Settings(BaseSettings):
 
     rules_category_id: str = ""
     rp_invite_channel_id: str = ""
+    community_category_id: str = ""
+    everyone_role_id: str = ""
 
     # --------------------
     # Application System Channels
@@ -33,13 +35,6 @@ class Settings(BaseSettings):
     accepted_log_channel_id: str = ""
     rejected_log_channel_id: str = ""
     audit_log_channel_id: str = ""
-
-    # --------------------
-    # Discord Role Structure
-    # --------------------
-    members_eoll_role_id: str = ""
-    everyone_role_id: str = ""
-    community_category_id: str = ""
 
     # --------------------
     # Server Invite

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from config import settings
 from database import get_database
-from utils import create_access_token, get_current_user
+from utils import create_access_token, get_current_user, get_discord_bot
 from models import UserCreate, User
 
 router = APIRouter()
@@ -167,16 +167,8 @@ async def get_me(current_user: dict = Depends(get_current_user), request: Reques
     avatar = current_user.get("avatar")
     discord_details = {}
     
-    # Try to get Discord bot instance for live data
-    discord_bot = None
-    if request:
-        discord_bot = getattr(request.app.state, 'discord_bot', None)
-        if not discord_bot:
-            try:
-                import main
-                discord_bot = main.discord_bot
-            except:
-                pass
+    # Try to get Discord bot instance for live data using centralized helper
+    discord_bot = get_discord_bot(request) if request else None
     
     # Fetch from Discord bot if available
     if discord_bot and hasattr(discord_bot, 'bot') and discord_bot.bot and discord_bot.is_ready:

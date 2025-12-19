@@ -99,3 +99,55 @@ def calculate_level(xp: int) -> int:
 def xp_for_level(level: int) -> int:
     """Calculate XP needed for level"""
     return level ** 2 * 100
+
+# ==========================================
+# Discord Bot Helpers (Centralized)
+# ==========================================
+
+def get_discord_bot(request = None):
+    """
+    Get Discord bot instance - centralized helper to avoid duplication
+    
+    Args:
+        request: Optional FastAPI Request object
+        
+    Returns:
+        DiscordBot instance or None
+    """
+    # Try to get from request state first
+    if request:
+        bot = getattr(request.app.state, 'discord_bot', None)
+        if bot:
+            return bot
+    
+    # Fallback: import from main
+    try:
+        import main
+        return main.discord_bot
+    except (ImportError, AttributeError):
+        return None
+
+class DiscordRoles:
+    """Centralized Discord role IDs - loaded once from environment"""
+    _loaded = False
+    CEO_ROLE_ID: int = 0
+    MANAGER_ROLE_ID: int = 0
+    MEMBER_ROLE_ID: int = 0
+    APPLICATION_PENDING_ROLE_ID: int = 0
+    EVERYONE_ROLE_ID: int = 0
+    
+    @classmethod
+    def load(cls):
+        """Load role IDs from environment variables"""
+        if not cls._loaded:
+            import os
+            cls.CEO_ROLE_ID = int(os.getenv('CEO_ROLE_ID', 0))
+            cls.MANAGER_ROLE_ID = int(os.getenv('MANAGER_ROLE_ID', 0))
+            cls.MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', 0))
+            cls.APPLICATION_PENDING_ROLE_ID = int(os.getenv('APPLICATION_PENDING_ROLE_ID', 0))
+            cls.EVERYONE_ROLE_ID = int(os.getenv('EVERYONE_ROLE_ID', 0))
+            cls._loaded = True
+        return cls
+
+# Load role IDs on module import
+DiscordRoles.load()

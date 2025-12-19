@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from typing import Dict, List
 from pydantic import BaseModel
 from database import get_database
-import os
+from utils import get_discord_bot, DiscordRoles
 import discord
 
 router = APIRouter()
@@ -16,11 +16,6 @@ discord_stats = {
     "last_update": None
 }
 
-def get_bot_instance():
-    """Get the Discord bot instance from main"""
-    import main
-    return main.discord_bot
-
 @router.get("/stats")
 async def get_discord_stats() -> Dict:
     """Get live Discord server stats (updated by integrated bot)"""
@@ -29,18 +24,16 @@ async def get_discord_stats() -> Dict:
 @router.get("/guild/members")
 async def get_all_guild_members(request: Request):
     """Get ALL members from Discord guild who have CEO, Manager, or Member role (regardless of online status)"""
-    # Try to get Discord bot instance
-    discord_bot = getattr(request.app.state, 'discord_bot', None)
-    if not discord_bot:
-        discord_bot = get_bot_instance()
+    # Get Discord bot instance using centralized helper
+    discord_bot = get_discord_bot(request)
     
     if not discord_bot or not discord_bot.is_ready:
         raise HTTPException(status_code=503, detail="Discord bot not connected")
     
-    # Get role IDs from environment
-    CEO_ROLE_ID = int(os.getenv('CEO_ROLE_ID', 0))
-    MANAGER_ROLE_ID = int(os.getenv('MANAGER_ROLE_ID', 0))
-    MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', 0))
+    # Use centralized role constants
+    CEO_ROLE_ID = DiscordRoles.CEO_ROLE_ID
+    MANAGER_ROLE_ID = DiscordRoles.MANAGER_ROLE_ID
+    MEMBER_ROLE_ID = DiscordRoles.MEMBER_ROLE_ID
     
     # Get guild
     guild_id = int(os.getenv('DISCORD_GUILD_ID'))

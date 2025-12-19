@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Optional, Dict
 from datetime import datetime, timedelta
 from database import get_database
-from utils import get_current_user, require_manager_or_admin
+from utils import get_current_user, require_manager_or_admin, get_discord_bot, DiscordRoles
 from bson import ObjectId
 import discord
 import os
@@ -19,18 +19,14 @@ ACCEPTED_LOG_CHANNEL_ID = int(os.getenv('ACCEPTED_LOG_CHANNEL_ID', '123199022058
 REJECTED_LOG_CHANNEL_ID = int(os.getenv('REJECTED_LOG_CHANNEL_ID', '1231990340353917008'))
 AUDIT_LOG_CHANNEL_ID = int(os.getenv('AUDIT_LOG_CHANNEL_ID') or '0')
 
-COMMUNITY_MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', '1228307652837249086'))
-APPLICATION_PENDING_ROLE_ID = int(os.getenv('APPLICATION_PENDING_ROLE_ID', '1359858065884844102'))
-MANAGER_ROLE_ID = int(os.getenv('MANAGER_ROLE_ID', '1228309637493952586'))
-CEO_ROLE_ID = int(os.getenv('CEO_ROLE_ID', '1228309908622020709'))
+# Use centralized role constants
+COMMUNITY_MEMBER_ROLE_ID = DiscordRoles.MEMBER_ROLE_ID
+APPLICATION_PENDING_ROLE_ID = DiscordRoles.APPLICATION_PENDING_ROLE_ID
+MANAGER_ROLE_ID = DiscordRoles.MANAGER_ROLE_ID
+CEO_ROLE_ID = DiscordRoles.CEO_ROLE_ID
 
 COOLDOWN_DAYS = 30
 COOLDOWN_SECONDS = COOLDOWN_DAYS * 24 * 60 * 60
-
-def get_bot_instance():
-    """Get Discord bot instance"""
-    import main
-    return main.discord_bot
 
 async def log_audit(bot, action: str, user_info: dict, details: dict):
     """Log all actions to audit channel"""
@@ -127,7 +123,7 @@ async def check_application_eligibility(
     Returns detailed status for frontend
     """
     db = get_database()
-    bot = getattr(request.app.state, 'discord_bot', None)
+    bot = get_discord_bot(request)
     
     if not bot or not bot.is_ready:
         raise HTTPException(status_code=503, detail="Discord bot not connected")
@@ -243,7 +239,7 @@ async def ceo_grant_reapply_override(
     CEO can grant a user permission to reapply before 30-day cooldown expires
     """
     db = get_database()
-    bot = getattr(request.app.state, 'discord_bot', None)
+    bot = get_discord_bot(request)
     
     if not bot or not bot.is_ready:
         raise HTTPException(status_code=503, detail="Discord bot not connected")
@@ -340,7 +336,7 @@ async def submit_application_with_discord(
     Full application submission with Discord integration
     """
     db = get_database()
-    bot = getattr(request.app.state, 'discord_bot', None)
+    bot = get_discord_bot(request)
     
     if not bot or not bot.is_ready:
         raise HTTPException(status_code=503, detail="Discord bot not connected")
@@ -597,7 +593,7 @@ async def accept_application_with_discord(
 ):
     """Accept application with full Discord integration"""
     db = get_database()
-    bot = getattr(request.app.state, 'discord_bot', None)
+    bot = get_discord_bot(request)
     
     print(f"🔍 DEBUG: Bot object: {bot}")
     print(f"🔍 DEBUG: Bot is_ready: {bot.is_ready if bot else 'Bot is None'}")
@@ -756,7 +752,7 @@ async def reject_application_with_discord(
 ):
     """Reject application with full Discord integration"""
     db = get_database()
-    bot = getattr(request.app.state, 'discord_bot', None)
+    bot = get_discord_bot(request)
     
     if not bot or not bot.is_ready:
         raise HTTPException(status_code=503, detail="Discord bot not connected")
@@ -905,3 +901,4 @@ async def reject_application_with_discord(
         "message": "Application rejected successfully",
         "dm_sent": dm_success
     }
+

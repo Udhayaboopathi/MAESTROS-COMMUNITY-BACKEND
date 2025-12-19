@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from datetime import datetime
 from database import get_database
-from utils import get_current_user, require_manager_or_admin
+from utils import get_current_user, require_manager_or_admin, get_discord_bot, DiscordRoles
 from models import ApplicationCreate, Application
 import discord
 import os
@@ -13,8 +13,8 @@ router = APIRouter()
 # Discord Configuration
 ACCEPTED_LOG_CHANNEL_ID = int(os.getenv('ACCEPTED_LOG_CHANNEL_ID', '1231990220589629441'))
 REJECTED_LOG_CHANNEL_ID = int(os.getenv('REJECTED_LOG_CHANNEL_ID', '1231990340353917008'))
-COMMUNITY_MEMBER_ROLE_ID = int(os.getenv('MEMBER_ROLE_ID', '1228307652837249086'))
-APPLICATION_PENDING_ROLE_ID = int(os.getenv('APPLICATION_PENDING_ROLE_ID', '1359858065884844102'))
+COMMUNITY_MEMBER_ROLE_ID = DiscordRoles.MEMBER_ROLE_ID
+APPLICATION_PENDING_ROLE_ID = DiscordRoles.APPLICATION_PENDING_ROLE_ID
 SERVER_INVITE_LINK = os.getenv('SERVER_INVITE_LINK', 'https://discord.gg/Xdac4KHXfC')
 
 async def send_dm(bot, user_id: str, embed: discord.Embed) -> bool:
@@ -503,7 +503,7 @@ async def accept_application(
 ):
     """Accept an application - Manager access"""
     db = get_database()
-    bot = getattr(request.app.state, 'discord_bot', None)
+    bot = get_discord_bot(request)
     from bson import ObjectId
     
     notes = request_data.get("notes", "Welcome to Maestros!")
@@ -663,7 +663,7 @@ async def reject_application(
 ):
     """Reject an application - Manager access"""
     db = get_database()
-    bot = getattr(request.app.state, 'discord_bot', None)
+    bot = get_discord_bot(request)
     from bson import ObjectId
     
     reason = request_data.get("reason", "")
@@ -877,3 +877,4 @@ async def delete_application(
     print(f"🗑️ Application {application_id} DELETED by {manager.get('username')}")
     
     return {"message": "Application deleted successfully"}
+
