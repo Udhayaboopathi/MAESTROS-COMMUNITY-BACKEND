@@ -157,10 +157,6 @@ async def callback(code: str, request: Request):
 async def get_me(current_user: dict = Depends(get_current_user), request: Request = None):
     """Get current user info with role details - fetches live data from Discord"""
     guild_roles = current_user.get("guild_roles", [])
-    
-    # Check if user is manager or CEO using role IDs (stored as strings in guild_roles)
-    is_manager = settings.manager_role_id in [str(role) for role in guild_roles]
-    is_ceo = settings.ceo_role_id in [str(role) for role in guild_roles]
     is_admin = current_user.get("discord_id") in settings.admin_ids_list
     
     # Fetch comprehensive Discord user data
@@ -242,10 +238,18 @@ async def get_me(current_user: dict = Depends(get_current_user), request: Reques
         except Exception as e:
             print(f"⚠️ Could not fetch Discord details: {str(e)}")
     
+    # Check permissions AFTER fetching fresh guild_roles
+    is_manager = settings.manager_role_id in guild_roles
+    is_ceo = settings.ceo_role_id in guild_roles
+    
     # Check if user has member role
     member_role_id = settings.member_role_id
     has_member_role = member_role_id in guild_roles if guild_roles else False
-    print(f"🔍 Member Role Check - User: {current_user['discord_id']}, Member Role ID: {member_role_id}, Guild Roles: {guild_roles}, Has Member Role: {has_member_role}")
+    print(f"🔍 Role Check - User: {current_user['discord_id']}")
+    print(f"   Guild Roles: {guild_roles}")
+    print(f"   CEO Role ID: {settings.ceo_role_id}, Is CEO: {is_ceo}")
+    print(f"   Manager Role ID: {settings.manager_role_id}, Is Manager: {is_manager}")
+    print(f"   Member Role ID: {member_role_id}, Has Member Role: {has_member_role}")
     
     return {
         "id": str(current_user["_id"]),
