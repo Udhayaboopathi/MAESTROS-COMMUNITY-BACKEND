@@ -104,18 +104,19 @@ class DiscordBot:
             except Exception as e:
                 print(f'⚠️ Failed to sync commands: {e}')
             
-            # Set bot status
+            # Set bot status to DND
             await self.bot.change_presence(
                 activity=discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name=os.getenv('BOT_STATUS', 'Maestros Community 🎵')
+                    type=discord.ActivityType.listening,
+                    name="Maestros Community"
                 ),
-                status=discord.Status.online
+                status=discord.Status.dnd
             )
             
             # Start background tasks
             self.update_stats.start()
             self.sync_roles.start()
+            self.rotate_status.start()
             
             self.is_ready = True
             print('✅ Discord Bot is ready!')
@@ -356,6 +357,28 @@ class DiscordBot:
             
         except Exception as e:
             print(f'❌ Error updating stats: {e}')
+    
+    @tasks.loop(seconds=5)
+    async def rotate_status(self):
+        """Rotate bot status every 5 seconds"""
+        try:
+            activities = [
+                discord.Activity(type=discord.ActivityType.listening, name="Maestros Community"),
+                discord.Activity(type=discord.ActivityType.listening, name="@I AM GROOT")
+            ]
+            
+            # Rotate between activities
+            if not hasattr(self, '_status_index'):
+                self._status_index = 0
+            
+            await self.bot.change_presence(
+                activity=activities[self._status_index],
+                status=discord.Status.dnd
+            )
+            
+            self._status_index = (self._status_index + 1) % len(activities)
+        except Exception as e:
+            print(f"❌ Error rotating status: {e}")
     
     @tasks.loop(minutes=5)
     async def sync_roles(self):
