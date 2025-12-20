@@ -4,12 +4,16 @@ Handles Discord server management, stats, and commands
 """
 
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 import aiohttp
 import asyncio
 import os
 from datetime import datetime
 from database import get_database
+from collections import deque
+import requests
+import random
 
 class DiscordBot:
     """Discord Bot integrated with FastAPI backend"""
@@ -17,6 +21,13 @@ class DiscordBot:
     def __init__(self):
         self.token = os.getenv('DISCORD_BOT_TOKEN')
         self.guild_id = int(os.getenv('DISCORD_GUILD_ID', 0))
+        
+        # API Configuration - Get from environment
+        api_host = os.getenv('API_HOST', 'localhost')
+        api_port = os.getenv('API_PORT', '8000')
+        self.backend_url = f"http://{api_host}:{api_port}"
+        self.api_base = f"{self.backend_url}/music"
+        self.frontend_url = os.getenv('FRONTEND_URL', 'https://maestros-community-frontend-5arz.vercel.app')
         
         # Load individual role IDs
         self.ceo_role_id = int(os.getenv('CEO_ROLE_ID')) if os.getenv('CEO_ROLE_ID') else None
@@ -27,12 +38,37 @@ class DiscordBot:
         print(f'🔧 Manager Role ID: {self.manager_role_id}')
         print(f'🔧 Member Role ID: {self.member_role_id}')
         
+        # Music bot variables
+        self.queues = {}  # guild_id -> deque of (media_url, title, song_data)
+        self.now_playing = {}  # guild_id -> song_data
+        self.loop_mode = {}  # guild_id -> bool
+        self.shuffle_mode = {}  # guild_id -> bool
+        self.music_messages = {}  # guild_id -> message_id
+        
+        # FFmpeg options for audio
+        self.FFMPEG_OPTIONS = {
+            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+            "options": "-vn"
+        }
+        
+        # Reaction emojis for music controls
+        self.REACTIONS = {
+            "pause": "⏸️",
+            "resume": "▶️",
+            "skip": "⏭️",
+            "loop": "🔁",
+            "shuffle": "🔀",
+            "stop": "⏹️",
+            "queue": "📋"
+        }
+        
         # Setup intents
         intents = discord.Intents.default()
         intents.members = True
         intents.presences = True
         intents.message_content = True
         intents.guilds = True
+        intents.voice_states = True
         
         # Create bot instance
         self.bot = commands.Bot(
@@ -43,7 +79,6 @@ class DiscordBot:
         
         self.is_ready = False
         self._setup_events()
-        self._setup_commands()
     
     def _setup_events(self):
         """Setup Discord event handlers"""
@@ -54,11 +89,24 @@ class DiscordBot:
             print(f'✅ Discord Bot: {self.bot.user} connected!')
             print(f'📊 Connected to {len(self.bot.guilds)} guild(s)')
             
+            # Load cogs
+            await self.load_cogs_async()
+            
+            # Load cogs
+            await self.load_cogs_async()
+            
+            # Sync slash commands
+            try:
+                synced = await self.bot.tree.sync()
+                print(f'✅ Synced {len(synced)} slash command(s)')
+            except Exception as e:
+                print(f'⚠️ Failed to sync commands: {e}')
+            
             # Set bot status
             await self.bot.change_presence(
                 activity=discord.Activity(
                     type=discord.ActivityType.watching,
-                    name=os.getenv('BOT_STATUS', 'Maestros Community')
+                    name=os.getenv('BOT_STATUS', 'Maestros Community 🎵')
                 ),
                 status=discord.Status.online
             )
@@ -156,10 +204,9 @@ class DiscordBot:
                 notes = interaction.data.get('components', [[]])[0].get('components', [[]])[0].get('value', '')
                 
                 # Call backend API to process acceptance
-                backend_url = f"http://localhost:{os.getenv('API_PORT', 8000)}"
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
-                        f"{backend_url}/application-manager/manager/accept/{app_id}",
+                        f"{self.backend_url}/application-manager/manager/accept/{app_id}",
                         json={"notes": notes, "manager_id": str(interaction.user.id)}
                     ) as resp:
                         if resp.status == 200:
@@ -176,10 +223,9 @@ class DiscordBot:
                 app_id = interaction.data['custom_id'].replace('reject_modal_', '')
                 reason = interaction.data.get('components', [[]])[0].get('components', [[]])[0].get('value', '')
                 
-                backend_url = f"http://localhost:{os.getenv('API_PORT', 8000)}"
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
-                        f"{backend_url}/application-manager/manager/reject/{app_id}",
+                        f"{self.backend_url}/application-manager/manager/reject/{app_id}",
                         json={"reason": reason, "manager_id": str(interaction.user.id)}
                     ) as resp:
                         if resp.status == 200:
@@ -190,119 +236,22 @@ class DiscordBot:
                 print(f"Error handling reject: {e}")
                 await interaction.response.send_message("❌ An error occurred.", ephemeral=True)
     
-    def _setup_commands(self):
-        """Setup Discord bot commands"""
-        
-        @self.bot.command(name='ping')
-        async def ping(ctx):
-            """Check bot latency"""
-            latency = round(self.bot.latency * 1000)
-            embed = discord.Embed(
-                title='🏓 Pong!',
-                description=f'Latency: {latency}ms',
-                color=0xFFD363
-            )
-            await ctx.send(embed=embed)
-        
-        @self.bot.command(name='stats')
-        async def stats(ctx):
-            """Show server stats"""
-            guild = ctx.guild
-            online = sum(1 for m in guild.members if m.status != discord.Status.offline and not m.bot)
-            
-            embed = discord.Embed(title='📊 Server Statistics', color=0xFFD363)
-            embed.add_field(name='Total Members', value=guild.member_count, inline=True)
-            embed.add_field(name='Online', value=online, inline=True)
-            embed.add_field(name='Channels', value=len(guild.channels), inline=True)
-            embed.add_field(name='Roles', value=len(guild.roles), inline=True)
-            embed.add_field(name='Boost Level', value=guild.premium_tier, inline=True)
-            embed.add_field(name='Boosts', value=guild.premium_subscription_count, inline=True)
-            embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
-            embed.set_footer(text=f'Server ID: {guild.id}')
-            await ctx.send(embed=embed)
-        
-        @self.bot.command(name='help')
-        async def help_command(ctx):
-            """Show bot commands"""
-            embed = discord.Embed(
-                title='🤖 Maestros Bot Commands',
-                description='Here are the available commands:',
-                color=0xFFD363
-            )
-            commands_list = [
-                ('!ping', 'Check bot latency'),
-                ('!stats', 'Show server statistics'),
-                ('!help', 'Show this help message'),
-                ('!apply', 'Get application link'),
-                ('!events', 'Show upcoming events'),
-            ]
-            for cmd, desc in commands_list:
-                embed.add_field(name=cmd, value=desc, inline=False)
-            await ctx.send(embed=embed)
-        
-        @self.bot.command(name='apply')
-        async def apply(ctx):
-            """Get application link"""
-            embed = discord.Embed(
-                title='📝 Apply to Maestros',
-                description='Ready to join our elite community? Apply now!',
-                color=0xFFD363
-            )
-            embed.add_field(
-                name='Application Portal',
-                value='[Click here to apply](https://maestros-community-frontend-5arz.vercel.app//apply)',
-                inline=False
-            )
-            embed.add_field(
-                name='Requirements',
-                value='• Active Discord member\n• Positive attitude\n• Team player\n• Gaming experience',
-                inline=False
-            )
-            await ctx.send(embed=embed)
-        
-        @self.bot.command(name='events')
-        async def events(ctx):
-            """Show upcoming events"""
-            db = get_database()
-            if db is None:
-                await ctx.send('❌ Database not connected')
-                return
-            
-            upcoming = await db.events.find({
-                'status': 'upcoming',
-                'date': {'$gte': datetime.utcnow()}
-            }).sort('date', 1).limit(5).to_list(5)
-            
-            if not upcoming:
-                await ctx.send('No upcoming events at the moment.')
-                return
-            
-            embed = discord.Embed(title='📅 Upcoming Events', color=0xFFD363)
-            for event in upcoming:
-                date_str = event['date'].strftime('%Y-%m-%d %H:%M UTC')
-                participants = len(event.get('participants', []))
-                max_participants = event.get('max_participants', 0)
-                embed.add_field(
-                    name=event['title'],
-                    value=f"📅 {date_str}\n🎮 {event.get('game', 'N/A')}\n👥 {participants}/{max_participants}\n🏆 {event.get('prize', 'N/A')}",
-                    inline=False
-                )
-            embed.set_footer(text='Visit the website to register')
-            await ctx.send(embed=embed)
-        
-        @self.bot.command(name='announce')
-        @commands.has_permissions(administrator=True)
-        async def announce(ctx, channel: discord.TextChannel, *, message):
-            """Make an announcement (Admin only)"""
-            embed = discord.Embed(
-                title='📢 Announcement',
-                description=message,
-                color=0xFFD363,
-                timestamp=datetime.utcnow()
-            )
-            embed.set_footer(text=f'By {ctx.author}', icon_url=ctx.author.display_avatar.url)
-            await channel.send('@everyone', embed=embed)
-            await ctx.send(f'✅ Announcement sent to {channel.mention}')
+    async def load_cogs_async(self):
+        """Async method to load cogs after bot is ready"""
+        cogs_to_load = ['cogs.general', 'cogs.music']
+        for cog in cogs_to_load:
+            try:
+                await self.bot.load_extension(cog)
+                print(f'✅ Loaded cog: {cog}')
+                
+                # Set parent_bot reference for accessing api_base and other properties
+                cog_name = cog.split('.')[-1].capitalize()
+                cog_instance = self.bot.get_cog(cog_name)
+                if cog_instance and hasattr(cog_instance, 'parent_bot'):
+                    cog_instance.parent_bot = self
+                    
+            except Exception as e:
+                print(f'❌ Failed to load cog {cog}: {e}')
     
     @tasks.loop(seconds=10)
     async def update_stats(self):
@@ -433,6 +382,23 @@ class DiscordBot:
             
         except Exception as e:
             print(f'❌ Error syncing roles: {e}')
+    
+    async def load_cogs_async(self):
+        """Async method to load cogs after bot is ready"""
+        cogs_to_load = ['cogs.general', 'cogs.music']
+        for cog in cogs_to_load:
+            try:
+                await self.bot.load_extension(cog)
+                print(f'✅ Loaded cog: {cog}')
+                
+                # Set parent_bot reference for accessing api_base and other properties
+                cog_name = cog.split('.')[-1].capitalize()
+                cog_instance = self.bot.get_cog(cog_name)
+                if cog_instance and hasattr(cog_instance, 'parent_bot'):
+                    cog_instance.parent_bot = self
+                    
+            except Exception as e:
+                print(f'❌ Failed to load cog {cog}: {e}')
     
     async def start_bot(self):
         """Start the Discord bot"""
@@ -668,3 +634,129 @@ class DiscordBot:
         except Exception as e:
             print(f'❌ Error getting category channels: {e}')
             return []
+    
+    # ==================== MUSIC BOT METHODS ====================
+    
+    def get_queue(self, guild_id):
+        """Get or create queue for guild"""
+        if guild_id not in self.queues:
+            self.queues[guild_id] = deque()
+        return self.queues[guild_id]
+    
+    def create_music_embed(self, song_data, embed_type="now_playing", status="playing",
+                          requester=None, channel_name=None, playlist_name=None, album_name=None):
+        """Create a standardized music embed"""
+        song_title = song_data.get("song", "Unknown")
+        image = song_data.get("image", "")
+        album = song_data.get("album", "Unknown Album")
+        year = song_data.get("year", "Unknown")
+        duration = song_data.get("duration", 0)
+        music = song_data.get("music", "Unknown")
+        singers = song_data.get("singers", "Unknown")
+        
+        if embed_type == "playlist":
+            title = "📀 Playlist - Now Playing"
+            color = 0x9B59B6
+        elif embed_type == "album":
+            title = "💿 Album - Now Playing"
+            color = 0xFFD700
+        elif embed_type == "queued":
+            title = "➕ Added to Queue"
+            color = discord.Color.blue()
+        else:
+            title = "🎵 Now Playing"
+            color = 0x1DB954
+        
+        embed = discord.Embed(title=title, description=f"**{song_title}**", color=color)
+        embed.set_thumbnail(url=image)
+        
+        status_icons = {
+            "playing": "🟢 Playing",
+            "paused": "⏸️ Paused",
+            "stopped": "⏹️ Stopped",
+            "queued": "⏸️ Queued"
+        }
+        status_text = status_icons.get(status, "🟢 Playing")
+        
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="💿 Album", value=album, inline=True)
+        embed.add_field(name="📅 Year", value=year, inline=True)
+        embed.add_field(name="⏱️ Duration", value=f"{duration} min", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="🎼 Music", value=music, inline=True)
+        embed.add_field(name="🎚️ Status", value=status_text, inline=True)
+        if channel_name:
+            embed.add_field(name="📢 Channel", value=channel_name, inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="🎤 Singers", value=singers, inline=False)
+        
+        if embed_type == "playlist":
+            embed.add_field(name="📀 Playlist", value=playlist_name or "Unknown", inline=False)
+        elif embed_type == "album":
+            embed.add_field(name="💿 Album Name", value=album_name or album, inline=False)
+        
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        embed.add_field(name="", value="", inline=True)
+        
+        if requester:
+            embed.add_field(name="👤 Requested by", value=requester, inline=False)
+        
+        if embed_type == "playlist":
+            embed.set_footer(text="🎶 Playlist • Use 🔀 button to shuffle")
+        elif embed_type == "album":
+            embed.set_footer(text="🎶 Album • Use 🔀 button to shuffle")
+        elif embed_type == "queued":
+            embed.set_footer(text="🎶 Added to queue")
+        else:
+            embed.set_footer(text="🎶 Enjoy the music!")
+        
+        return embed
+    
+    def play_next(self, guild_id, voice_client):
+        """Play next song in queue"""
+        print(f"\n🔄 play_next called for guild {guild_id}")
+        
+        if not voice_client or not voice_client.is_connected():
+            print(f"❌ Voice client not connected for guild {guild_id}")
+            return
+        
+        queue = self.get_queue(guild_id)
+        print(f"📊 Current queue length: {len(queue)}")
+        
+        if queue:
+            media_url, title, song_data = queue.popleft()
+            print(f"▶️ Popped from queue: {title}")
+            print(f"🔗 Media URL: {media_url[:50]}...")
+            self.now_playing[guild_id] = song_data
+            
+            def after_playing(error):
+                if error:
+                    print(f"❌ Error playing song: {error}")
+                print(f"✅ Song finished: {title}")
+                print(f"🔄 Calling play_next from callback...")
+                self.play_next(guild_id, voice_client)
+            
+            try:
+                source = discord.FFmpegPCMAudio(media_url, **self.FFMPEG_OPTIONS)
+                voice_client.play(source, after=after_playing)
+                print(f"🎵 Now playing: {title}\n")
+            except Exception as e:
+                print(f"❌ Failed to play {title}: {e}")
+                self.play_next(guild_id, voice_client)
+        else:
+            print(f"📭 Queue empty for guild {guild_id}")
+            if guild_id in self.now_playing:
+                del self.now_playing[guild_id]
+    
+    async def add_music_reactions(self, message):
+        """Add all music control reactions to a message"""
+        for emoji in self.REACTIONS.values():
+            await message.add_reaction(emoji)
+

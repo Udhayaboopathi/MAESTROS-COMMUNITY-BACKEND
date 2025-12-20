@@ -5,6 +5,7 @@ gunicorn
 
 # Discord Integration
 discord.py
+PyNaCl
 
 # Database
 motor           
@@ -23,6 +24,7 @@ bcrypt
 
 # HTTP Client
 aiohttp
+requests
 
 # Utilities
 python-dotenv
@@ -30,6 +32,7 @@ python-multipart
 python-dateutil
 email-validator
 websockets
+pyDes
 
 # Caching
 cachetools
