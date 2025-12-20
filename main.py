@@ -6,13 +6,26 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables first
-load_dotenv('env/.env')
+load_dotenv("env/.env")
 
 from app.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
 
 # Import routers
-from app.api import auth, users, discord, applications, events, admin, moderation, games, rules, application_manager, announcements, music
+from app.api import (
+    auth,
+    users,
+    discord,
+    applications,
+    events,
+    admin,
+    moderation,
+    games,
+    rules,
+    application_manager,
+    announcements,
+    music,
+)
 
 # Import Discord bot
 from app.bot.bot import DiscordBot
@@ -20,35 +33,37 @@ from app.bot.bot import DiscordBot
 # Global bot instance
 discord_bot = None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle - starts both FastAPI and Discord bot"""
     global discord_bot
-    
+
     # Startup
     print("🚀 Starting Maestros Community Backend...")
-    
+
     # Connect to MongoDB
     await connect_to_mongo()
     print("✅ MongoDB connected")
-    
-    # Create database indexes for optimal performance
+
+    # Create database indexes
     try:
         from app.core.database_indexes import create_indexes
         await create_indexes()
+        print("✅ Database indexes ready")
     except Exception as e:
-        print(f"⚠️  Warning: Could not create indexes: {str(e)}")
-    
-    # Start Discord bot in background
+        print(f"⚠️  Warning: Could not create indexes: {e}")
+
+    # Start Discord bot
     discord_bot = DiscordBot()
     asyncio.create_task(discord_bot.start_bot())
     print("✅ Discord bot starting...")
-    
-    # Make bot instance available to routes
+
+    # Attach bot to app state
     app.state.discord_bot = discord_bot
-    
+
     yield
-    
+
     # Shutdown
     print("🛑 Shutting down...")
     if discord_bot:
@@ -56,24 +71,46 @@ async def lifespan(app: FastAPI):
     await close_mongo_connection()
     print("✅ Shutdown complete")
 
+
 app = FastAPI(
     title="Maestros Community API",
     description="Backend API for Maestros Gaming Community (with Discord Bot)",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# CORS Middleware - Use origins from settings only
+# -------------------------------------------------------
+# ✅ CORS — HARD FIX (DO NOT REMOVE)
+# -------------------------------------------------------
+
+# Ensure frontend origin is always present
+frontend_origin = "https://maestros-community-frontend.vercel.app"
+
+cors_origins = []
+
+# Pull from settings if valid
+if hasattr(settings, "cors_origins_list") and settings.cors_origins_list:
+    cors_origins.extend(settings.cors_origins_list)
+
+# Force-add frontend origin if missing
+if frontend_origin not in cors_origins:
+    cors_origins.append(frontend_origin)
+
+print("🌐 CORS Allowed Origins:", cors_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=cors_origins,   # MUST be explicit when credentials=True
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
-# Include routers
+# -------------------------------------------------------
+# Routers
+# -------------------------------------------------------
+
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(discord.router, prefix="/discord", tags=["Discord"])
@@ -87,48 +124,49 @@ app.include_router(moderation.router, prefix="/moderation", tags=["Moderation"])
 app.include_router(announcements.router, prefix="/announcements", tags=["Announcements"])
 app.include_router(music.router, prefix="/music", tags=["Music"])
 
+
 @app.get("/")
 async def root():
     return {
         "message": "Maestros Community API + Discord Bot",
         "version": "1.0.0",
         "status": "online",
-        "discord_bot": "active" if discord_bot and discord_bot.is_ready else "starting"
+        "discord_bot": "active" if discord_bot and discord_bot.is_ready else "starting",
     }
+
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
     return {
         "status": "healthy",
         "api": "online",
-        "discord_bot": discord_bot.is_ready if discord_bot else False
+        "discord_bot": discord_bot.is_ready if discord_bot else False,
     }
+
 
 @app.get("/bot/status")
 async def bot_status():
-    """Get Discord bot status"""
     if not discord_bot:
         return {"status": "not_started"}
-    
+
     return {
         "status": "online" if discord_bot.is_ready else "starting",
         "guilds": len(discord_bot.bot.guilds) if discord_bot.bot else 0,
-        "latency": round(discord_bot.bot.latency * 1000) if discord_bot.bot else 0
+        "latency": round(discord_bot.bot.latency * 1000) if discord_bot.bot else 0,
     }
+
 
 @app.get("/cache/status")
 async def cache_status():
-    """Get cache statistics"""
     try:
         from app.cache import get_cache_stats
         return get_cache_stats()
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.post("/cache/clear")
 async def clear_cache():
-    """Clear all caches (admin only in production)"""
     try:
         from app.cache import clear_all_caches
         clear_all_caches()
@@ -136,11 +174,12 @@ async def clear_cache():
     except Exception as e:
         return {"error": str(e)}
 
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "main:app",
         host=settings.api_host,
         port=settings.api_port,
-        reload=settings.api_reload
+        reload=settings.api_reload,
     )
