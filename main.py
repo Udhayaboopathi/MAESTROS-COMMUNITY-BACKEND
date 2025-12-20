@@ -6,16 +6,16 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables first
-load_dotenv()
+load_dotenv('env/.env')
 
-from config import settings
-from database import connect_to_mongo, close_mongo_connection
+from app.config import settings
+from app.core.database import connect_to_mongo, close_mongo_connection
 
 # Import routers
-from routers import auth, users, discord, applications, events, admin, moderation, games, rules, application_manager, announcements, music
+from app.api import auth, users, discord, applications, events, admin, moderation, games, rules, application_manager, announcements, music
 
 # Import Discord bot
-from bot import DiscordBot
+from app.bot.bot import DiscordBot
 
 # Global bot instance
 discord_bot = None
@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     
     # Create database indexes for optimal performance
     try:
-        from database_indexes import create_indexes
+        from app.core.database_indexes import create_indexes
         await create_indexes()
     except Exception as e:
         print(f"⚠️  Warning: Could not create indexes: {str(e)}")
@@ -121,7 +121,7 @@ async def bot_status():
 async def cache_status():
     """Get cache statistics"""
     try:
-        from cache import get_cache_stats
+        from app.cache import get_cache_stats
         return get_cache_stats()
     except Exception as e:
         return {"error": str(e)}
@@ -130,7 +130,7 @@ async def cache_status():
 async def clear_cache():
     """Clear all caches (admin only in production)"""
     try:
-        from cache import clear_all_caches
+        from app.cache import clear_all_caches
         clear_all_caches()
         return {"message": "All caches cleared successfully"}
     except Exception as e:
