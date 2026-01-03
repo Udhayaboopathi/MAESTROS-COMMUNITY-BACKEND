@@ -244,7 +244,7 @@ class DiscordBot:
         import sys
         import traceback
         
-        cogs_to_load = ['app.bot.cogs.general', 'app.bot.cogs.music']
+        cogs_to_load = ['app.bot.cogs.general', 'app.bot.cogs.music', 'app.bot.cogs.fuel_delivery']
         print(f'🔄 Loading {len(cogs_to_load)} cogs...')
         
         for cog in cogs_to_load:
