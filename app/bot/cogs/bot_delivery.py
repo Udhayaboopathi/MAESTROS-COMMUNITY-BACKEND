@@ -1,6 +1,6 @@
 """
-Fuel Delivery Log Cog
-Handles fuel delivery logging with modal and persistent button
+Bot Dealership Delivery Log Cog
+Handles vehicle delivery logging with modal and persistent button
 """
 
 import discord
@@ -11,43 +11,36 @@ import asyncio
 import io
 
 
-class FuelDeliveryModal(discord.ui.Modal):
-    """Modal for fuel delivery information"""
+class BotDeliveryModal(discord.ui.Modal):
+    """Modal for bot/vehicle delivery information"""
     
     def __init__(self):
-        super().__init__(title='📦 Fuel Delivery Log')
-    
-    order_id = discord.ui.TextInput(
-        label='Order ID',
-        placeholder='Enter order ID (e.g., 43)',
-        required=True,
-        max_length=50
-    )
+        super().__init__(title='🚚 Mx Delivery Log')
     
     delivered_to = discord.ui.TextInput(
         label='Delivered To',
-        placeholder='Enter location (e.g., Gas Station 15)',
+        placeholder='Enter location (e.g., Bot Dealership)',
         required=True,
         max_length=100
     )
     
     orders = discord.ui.TextInput(
-        label='Orders (Liters)',
-        placeholder='Enter amount in liters (e.g., 10000)',
+        label='Orders',
+        placeholder='Enter vehicle details (e.g., 25 Dominor)',
         required=True,
-        max_length=50
+        max_length=100
     )
     
     delivery_date = discord.ui.TextInput(
         label='Date',
-        placeholder='Enter date (e.g., 02.01.2026)',
+        placeholder='Enter date (e.g., 01.01.2026)',
         required=True,
         max_length=50
     )
     
     delivery_time = discord.ui.TextInput(
         label='Time',
-        placeholder='Enter time (e.g., 11:20 PM)',
+        placeholder='Enter time (e.g., 17.25 - (5.35))',
         required=True,
         max_length=50
     )
@@ -56,14 +49,13 @@ class FuelDeliveryModal(discord.ui.Modal):
         """Handle modal submission"""
         # Create embed for the delivery log
         embed = discord.Embed(
-            title='📦 Fuel Delivery Log',
+            title='🚚 Mx Delivery Log',
             color=0xFFD700,
             timestamp=datetime.utcnow()
         )
         
-        embed.add_field(name='Order ID', value=self.order_id.value, inline=True)
         embed.add_field(name='Delivered To', value=self.delivered_to.value, inline=True)
-        embed.add_field(name='Orders', value=f"{self.orders.value} Liters", inline=True)
+        embed.add_field(name='Orders', value=self.orders.value, inline=True)
         embed.add_field(name='Date', value=self.delivery_date.value, inline=True)
         embed.add_field(name='Time', value=self.delivery_time.value, inline=True)
         embed.add_field(name='Logged By', value=interaction.user.mention, inline=True)
@@ -74,41 +66,41 @@ class FuelDeliveryModal(discord.ui.Modal):
         await interaction.response.send_message(embed=embed, ephemeral=False)
         
         # Move button to bottom after posting log
-        cog = interaction.client.get_cog('FuelDelivery')
+        cog = interaction.client.get_cog('BotDelivery')
         if cog:
             await cog.move_button_to_bottom()
 
 
-class FuelDeliveryView(discord.ui.View):
-    """Persistent view with fuel delivery button"""
+class BotDeliveryView(discord.ui.View):
+    """Persistent view with bot delivery button"""
     
     def __init__(self):
         super().__init__(timeout=None)  # Persistent view
     
     @discord.ui.button(
-        label='📦 Fuel Delivery Log',
+        label='🚚 Mx Delivery Log',
         style=discord.ButtonStyle.primary,
-        custom_id='fuel_delivery_button'
+        custom_id='bot_delivery_button'
     )
-    async def fuel_delivery_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def bot_delivery_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle button click to show modal"""
-        modal = FuelDeliveryModal()
+        modal = BotDeliveryModal()
         await interaction.response.send_modal(modal)
 
 
-class FuelDelivery(commands.Cog):
-    """Fuel Delivery logging commands"""
+class BotDelivery(commands.Cog):
+    """Bot Dealership Delivery logging commands"""
     
     def __init__(self, bot):
         self.bot = bot
-        self.channel_id = 1456240608372068465  # Channel ID for the button
+        self.channel_id = 1440258251068407938  # Channel ID for the button
         self.button_message_id = None  # Store the button message ID
     
     async def cog_load(self):
         """Called when the cog is loaded"""
         # Register the persistent view
-        self.bot.add_view(FuelDeliveryView())
-        print('✅ Fuel Delivery cog loaded with persistent view')
+        self.bot.add_view(BotDeliveryView())
+        print('✅ Bot Delivery cog loaded with persistent view')
         
         # Auto-create button on bot startup
         await self.auto_setup_button()
@@ -130,21 +122,21 @@ class FuelDelivery(commands.Cog):
             
             # Create new button at bottom
             embed = discord.Embed(
-                title='📦 Fuel Delivery Log System',
-                description='Click the button below to log a fuel delivery.',
+                title='🚚 Mx Delivery Log System',
+                description='Click the button below to log a vehicle delivery.',
                 color=0xFFD700
             )
             embed.add_field(
                 name='How to use:',
-                value='1. Click the **Fuel Delivery Log** button\n'
+                value='1. Click the **Mx Delivery Log** button\n'
                       '2. Fill in the delivery information\n'
                       '3. Submit the form\n'
                       '4. The log will be posted to this channel',
                 inline=False
             )
-            embed.set_footer(text='Fuel Delivery Management System')
+            embed.set_footer(text='Bot Dealership Delivery Management System')
             
-            view = FuelDeliveryView()
+            view = BotDeliveryView()
             message = await channel.send(embed=embed, view=view)
             self.button_message_id = message.id
             
@@ -164,39 +156,39 @@ class FuelDelivery(commands.Cog):
             # Check if button already exists in recent messages
             async for message in channel.history(limit=50):
                 if message.author == self.bot.user and len(message.embeds) > 0:
-                    if message.embeds[0].title == '📦 Fuel Delivery Log System':
-                        print(f'✅ Fuel delivery button already exists in channel')
+                    if message.embeds[0].title == '🚚 Mx Delivery Log System':
+                        print(f'✅ Bot delivery button already exists in channel')
                         self.button_message_id = message.id
                         return
             
             # Create the button if it doesn't exist
             embed = discord.Embed(
-                title='📦 Fuel Delivery Log System',
-                description='Click the button below to log a fuel delivery.',
+                title='🚚 Mx Delivery Log System',
+                description='Click the button below to log a vehicle delivery.',
                 color=0xFFD700
             )
             embed.add_field(
                 name='How to use:',
-                value='1. Click the **Fuel Delivery Log** button\n'
+                value='1. Click the **Mx Delivery Log** button\n'
                       '2. Fill in the delivery information\n'
                       '3. Submit the form\n'
                       '4. The log will be posted to this channel',
                 inline=False
             )
-            embed.set_footer(text='Fuel Delivery Management System')
+            embed.set_footer(text='Bot Dealership Delivery Management System')
             
-            view = FuelDeliveryView()
+            view = BotDeliveryView()
             message = await channel.send(embed=embed, view=view)
             self.button_message_id = message.id
-            print(f'✅ Fuel delivery button created in channel {self.channel_id}')
+            print(f'✅ Bot delivery button created in channel {self.channel_id}')
             
         except Exception as e:
-            print(f'❌ Error setting up fuel delivery button: {e}')
+            print(f'❌ Error setting up bot delivery button: {e}')
     
-    @app_commands.command(name="setup_fuel_delivery", description="Setup fuel delivery log button (Admin only)")
+    @app_commands.command(name="setup_bot_delivery", description="Setup bot delivery log button (Admin only)")
     @app_commands.checks.has_permissions(administrator=True)
-    async def setup_fuel_delivery(self, interaction: discord.Interaction):
-        """Setup the fuel delivery button in the specified channel"""
+    async def setup_bot_delivery(self, interaction: discord.Interaction):
+        """Setup the bot delivery button in the specified channel"""
         channel = self.bot.get_channel(self.channel_id)
         
         if not channel:
@@ -208,31 +200,31 @@ class FuelDelivery(commands.Cog):
         
         # Create embed for the button message
         embed = discord.Embed(
-            title='📦 Fuel Delivery Log System',
-            description='Click the button below to log a fuel delivery.',
+            title='🚚 Mx Delivery Log System',
+            description='Click the button below to log a vehicle delivery.',
             color=0xFFD700
         )
         embed.add_field(
             name='How to use:',
-            value='1. Click the **Fuel Delivery Log** button\n'
+            value='1. Click the **Mx Delivery Log** button\n'
                   '2. Fill in the delivery information\n'
                   '3. Submit the form\n'
                   '4. The log will be posted to this channel',
             inline=False
         )
-        embed.set_footer(text='Fuel Delivery Management System')
+        embed.set_footer(text='Bot Dealership Delivery Management System')
         
         # Send the message with the button
-        view = FuelDeliveryView()
+        view = BotDeliveryView()
         await channel.send(embed=embed, view=view)
         
         await interaction.response.send_message(
-            f'✅ Fuel delivery log button has been set up in <#{self.channel_id}>',
+            f'✅ Bot delivery log button has been set up in <#{self.channel_id}>',
             ephemeral=True
         )
     
-    @setup_fuel_delivery.error
-    async def setup_fuel_delivery_error(self, interaction: discord.Interaction, error):
+    @setup_bot_delivery.error
+    async def setup_bot_delivery_error(self, interaction: discord.Interaction, error):
         """Handle setup command errors"""
         if isinstance(error, app_commands.errors.MissingPermissions):
             await interaction.response.send_message(
@@ -243,4 +235,4 @@ class FuelDelivery(commands.Cog):
 
 async def setup(bot):
     """Setup function for cog"""
-    await bot.add_cog(FuelDelivery(bot))
+    await bot.add_cog(BotDelivery(bot))
