@@ -35,9 +35,6 @@ class UserInDB(UserBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     roles: List[str] = []
     guild_roles: List[str] = []
-    xp: int = 0
-    level: int = 1
-    badges: List[str] = []
     joined_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: datetime = Field(default_factory=datetime.utcnow)
     

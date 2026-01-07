@@ -244,7 +244,13 @@ class DiscordBot:
         import sys
         import traceback
         
-        cogs_to_load = ['app.bot.cogs.general', 'app.bot.cogs.music', 'app.bot.cogs.fuel_delivery', 'app.bot.cogs.bot_delivery']
+        cogs_to_load = [
+            'app.bot.cogs.general',
+            'app.bot.cogs.music',
+            'app.bot.cogs.fuel_delivery',
+            'app.bot.cogs.bot_delivery',
+            'app.bot.cogs.server_stats'
+        ]
         print(f'🔄 Loading {len(cogs_to_load)} cogs...')
         
         for cog in cogs_to_load:
@@ -319,9 +325,6 @@ class DiscordBot:
                         user_data = await db.users.find_one({'discord_id': str(member.id)})
                         if user_data:
                             member_info.update({
-                                'level': user_data.get('level', 1),
-                                'xp': user_data.get('xp', 0),
-                                'badges': user_data.get('badges', []),
                                 'joined_at': user_data.get('joined_at').isoformat() if user_data.get('joined_at') else None,
                                 'last_login': user_data.get('last_login').isoformat() if user_data.get('last_login') else None,
                             })

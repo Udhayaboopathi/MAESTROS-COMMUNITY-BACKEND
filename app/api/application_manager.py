@@ -145,7 +145,7 @@ async def check_application_eligibility(
             "reason": "NOT_IN_SERVER",
             "message": "You must be a member of the Discord server to apply.",
             "action": "JOIN_SERVER",
-            "invite_url": "https://discord.gg/maestros"
+            "invite_url": "https://discord.gg/pG83VJECT3"
         }
     
     role_ids = [role.id for role in member.roles]

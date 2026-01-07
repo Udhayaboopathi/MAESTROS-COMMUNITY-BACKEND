@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from datetime import datetime
 from app.core.database import get_database
-from app.utils import get_current_user, calculate_level, require_admin
+from app.utils import get_current_user, require_admin
 from app.core.models import EventCreate, Event
 
 router = APIRouter()
@@ -207,24 +207,6 @@ async def register_for_event(
         },
         "timestamp": datetime.utcnow()
     })
-    
-    # Award XP (server-side calculation)
-    xp_reward = 25
-    await db.users.update_one(
-        {"discord_id": current_user["discord_id"]},
-        {"$inc": {"xp": xp_reward}}
-    )
-    
-    # Recalculate level
-    updated_user = await db.users.find_one({"discord_id": current_user["discord_id"]})
-    new_level = calculate_level(updated_user["xp"])
-    old_level = updated_user.get("level", 0)
-    
-    if new_level > old_level:
-        await db.users.update_one(
-            {"discord_id": current_user["discord_id"]},
-            {"$set": {"level": new_level}}
-        )
     
     return {
         "message": "Registered successfully",

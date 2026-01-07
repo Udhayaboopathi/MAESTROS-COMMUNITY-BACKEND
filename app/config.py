@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     server_invite_link: str = ""
 
     # --------------------
+    # FiveM Server
+    # --------------------
+    fivem_server_ip: str = ""
+    fivem_server_name: str = "Maestros RP"
+    fivem_stats_channel_id: str = ""
+    member_count_channel_id: str = ""
+    fivem_stats_text_channel_id: str = ""
+
+    # --------------------
     # Discord OAuth
     # --------------------
     discord_client_id: str
@@ -53,7 +62,7 @@ class Settings(BaseSettings):
     # --------------------
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 1440
+    jwt_access_token_expire_minutes: int = 60  # 1 hour session
 
     # --------------------
     # API

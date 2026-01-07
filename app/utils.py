@@ -105,15 +105,6 @@ async def require_manager_or_admin(current_user: dict = Depends(get_current_user
         detail="Manager or Admin access required"
     )
 
-def calculate_level(xp: int) -> int:
-    """Calculate level from XP"""
-    import math
-    return int(math.sqrt(xp / 100))
-
-def xp_for_level(level: int) -> int:
-    """Calculate XP needed for level"""
-    return level ** 2 * 100
-
 # ==========================================
 # Discord Bot Helpers (Centralized)
 # ==========================================

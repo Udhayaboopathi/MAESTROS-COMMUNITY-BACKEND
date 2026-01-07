@@ -15,7 +15,7 @@ ACCEPTED_LOG_CHANNEL_ID = int(os.getenv('ACCEPTED_LOG_CHANNEL_ID', '123199022058
 REJECTED_LOG_CHANNEL_ID = int(os.getenv('REJECTED_LOG_CHANNEL_ID', '1231990340353917008'))
 COMMUNITY_MEMBER_ROLE_ID = DiscordRoles.MEMBER_ROLE_ID
 APPLICATION_PENDING_ROLE_ID = DiscordRoles.APPLICATION_PENDING_ROLE_ID
-SERVER_INVITE_LINK = os.getenv('SERVER_INVITE_LINK', 'https://discord.gg/Xdac4KHXfC')
+SERVER_INVITE_LINK = os.getenv('SERVER_INVITE_LINK', 'https://discord.gg/pG83VJECT3')
 
 async def send_dm(bot, user_id: str, embed: discord.Embed) -> bool:
     """Send DM to user, return success status"""
@@ -184,31 +184,10 @@ async def submit_application(
         "timestamp": datetime.utcnow()
     })
     
-    # Award XP for submission (logic in backend)
-    xp_awarded = 50
-    await db.users.update_one(
-        {"discord_id": current_user["discord_id"]},
-        {"$inc": {"xp": xp_awarded}}
-    )
-    
-    # Recalculate level based on new XP
-    user = await db.users.find_one({"discord_id": current_user["discord_id"]})
-    new_level = calculate_level(user["xp"])
-    old_level = user.get("level", 0)
-    
-    if new_level > old_level:
-        await db.users.update_one(
-            {"discord_id": current_user["discord_id"]},
-            {"$set": {"level": new_level}}
-        )
-    
     return {
         "message": "Application submitted successfully",
         "application_id": str(result.inserted_id),
-        "score": score,
-        "xp_awarded": xp_awarded,
-        "level_up": new_level > old_level,
-        "new_level": new_level
+        "score": score
     }
 
 @router.get("/list")
@@ -250,11 +229,6 @@ async def get_application_status(
         raise HTTPException(status_code=403, detail="Access denied")
     
     return {"application": application}
-
-def calculate_level(xp: int) -> int:
-    """Calculate level from XP - ALL LOGIC SERVER-SIDE"""
-    import math
-    return int(math.sqrt(xp / 100))
 
 async def analyze_application(data: dict) -> tuple[float, dict]:
     """

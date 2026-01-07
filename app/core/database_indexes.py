@@ -19,12 +19,6 @@ async def create_indexes():
         await db.users.create_index("username")
         print("✅ Created index on users.username")
         
-        await db.users.create_index([("xp", -1)])  # Descending for leaderboard
-        print("✅ Created index on users.xp (descending)")
-        
-        await db.users.create_index([("level", -1)])
-        print("✅ Created index on users.level (descending)")
-        
         # Games collection indexes
         await db.games.create_index("active")
         print("✅ Created index on games.active")
@@ -100,7 +94,7 @@ async def verify_indexes():
     print("\n🔍 Verifying database indexes...")
     
     collections = {
-        "users": ["discord_id", "username", "xp", "level"],
+        "users": ["discord_id", "username"],
         "games": ["active", "created_at", "name"],
         "applications": ["user_id", "status", "submitted_at"],
         "activity": ["user_id", "timestamp"],

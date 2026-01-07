@@ -126,9 +126,6 @@ async def callback(code: str, request: Request):
             user_dict.update({
                 "roles": [],
                 "guild_roles": [],
-                "xp": 0,
-                "level": 1,
-                "badges": [],
                 "joined_at": datetime.utcnow(),
             })
             result = await db.users.insert_one(user_dict)
@@ -261,9 +258,6 @@ async def get_me(current_user: dict = Depends(get_current_user), request: Reques
         "email": current_user.get("email"),
         "roles": current_user.get("roles", []),
         "guild_roles": guild_roles,
-        "xp": current_user.get("xp", 0),
-        "level": current_user.get("level", 1),
-        "badges": current_user.get("badges", []),
         "joined_at": current_user.get("joined_at"),
         "last_login": current_user.get("last_login"),
         "is_member": current_user.get("is_member", False),
